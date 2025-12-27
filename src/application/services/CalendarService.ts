@@ -559,8 +559,9 @@ export class CalendarService {
       const label = frontmatter[config.labelField] || fileInfo.basename;
 
       // Convert dates to angles (0 = Jan 1, 2π = Dec 31)
-      const startAngle = this.dateToYearAngle(clampedStart, year);
-      const endAngle = this.dateToYearAngle(clampedEnd, year);
+      // For cross-year arcs, extend to full year boundary
+      const startAngle = continuesFromPreviousYear ? 0 : this.dateToYearAngle(clampedStart, year);
+      const endAngle = continuesIntoNextYear ? 2 * Math.PI : this.dateToYearAngle(clampedEnd, year);
 
       // Get hex color only if color was specified in frontmatter
       const { RING_COLORS } = require('../../core/domain/types');
