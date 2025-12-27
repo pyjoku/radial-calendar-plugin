@@ -55,12 +55,40 @@ export class RadialCalendarBasesView extends BasesView {
   }
 
   /**
+   * Safely extract a string value from config
+   * Handles objects, indices, and direct values
+   */
+  private getConfigString(key: string, defaultValue: string): string {
+    const value = this.config.get(key);
+    if (value === null || value === undefined) {
+      return defaultValue;
+    }
+    // Direct string
+    if (typeof value === 'string') {
+      return value;
+    }
+    // Number (might be index) - return default
+    if (typeof value === 'number') {
+      return defaultValue;
+    }
+    // Object with value property
+    if (typeof value === 'object' && 'value' in value) {
+      return String((value as { value: unknown }).value);
+    }
+    // Object with label property (dropdown option)
+    if (typeof value === 'object' && 'label' in value) {
+      return String((value as { label: unknown }).label).toLowerCase();
+    }
+    return defaultValue;
+  }
+
+  /**
    * Called when data is updated - re-render the calendar
    */
   onDataUpdated(): void {
-    // Get config values
-    this.dateProperty = String(this.config.get('dateProperty') ?? 'date');
-    this.color = String(this.config.get('color') ?? 'blue');
+    // Get config values - handle various return types from Bases
+    this.dateProperty = this.getConfigString('dateProperty', 'date');
+    this.color = this.getConfigString('color', 'blue');
     const yearConfig = this.config.get('year');
     if (yearConfig && typeof yearConfig === 'number') {
       this.currentYear = yearConfig;
