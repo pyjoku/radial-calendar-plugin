@@ -34,6 +34,9 @@ const RING_COLORS: Record<string, string> = {
   indigo: '#3f51b5',
 };
 
+// Color options in same order as registered in plugin (for index lookup)
+const COLOR_OPTIONS = ['blue', 'green', 'red', 'purple', 'orange', 'teal', 'pink', 'yellow'];
+
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
@@ -63,12 +66,22 @@ export class RadialCalendarBasesView extends BasesView {
     if (value === null || value === undefined) {
       return defaultValue;
     }
-    // Direct string
+    // Direct string - but check if it's a numeric string (index)
     if (typeof value === 'string') {
+      // If it looks like an index, convert it
+      if (/^\d+$/.test(value) && key === 'color') {
+        const index = parseInt(value, 10);
+        if (index >= 0 && index < COLOR_OPTIONS.length) {
+          return COLOR_OPTIONS[index];
+        }
+      }
       return value;
     }
-    // Number (might be index) - return default
+    // Number (index from dropdown)
     if (typeof value === 'number') {
+      if (key === 'color' && value >= 0 && value < COLOR_OPTIONS.length) {
+        return COLOR_OPTIONS[value];
+      }
       return defaultValue;
     }
     // Object with value property
