@@ -57,6 +57,28 @@
 - Storyline-Tracking über das Jahr
 - Visualisiert Zusammenhänge
 
+### Radial Calendar als Bases View (Obsidian 1.10+)
+- Nutzt `plugin.registerBasesView()` API
+- Radial Calendar als zusätzlicher View-Type in Bases
+- Doku: https://docs.obsidian.md/plugins/guides/bases-view
+- Beispiel: https://github.com/obsidianmd/obsidian-maps
+
+**Use-Case:** Einzeldateien nach Properties filtern (Geburtstage, Deadlines)
+- Bases übernimmt: Filter, Query Engine, Properties, Filter-UI
+- Wir liefern: Radial Renderer
+
+**Abgrenzung zum Standalone-Plugin:**
+| Bases View | Standalone |
+|------------|------------|
+| Einzeldateien | Spanning Arcs |
+| Bases Filter-UI | Eigener Filter-Parser |
+| Properties | Multi-Day Events |
+| - | Google Calendar Sync |
+| - | radcal Codeblock |
+| - | Life View |
+
+**Zwei Systeme koexistieren** - Nutzer können wählen.
+
 ### Visueller Filter-Builder (wie Bases)
 - Modal/Popover mit Filter-Optionen
 - Dropdown für Funktion (inFolder, hasTag, nameContains, etc.)
@@ -64,6 +86,7 @@
 - AND/OR Logik-Buttons zum Kombinieren
 - Generiert YAML automatisch in den Codeblock
 - Inspiriert von Obsidian Bases Filter-Picker
+- **Alternative:** Bases View nutzen (siehe oben)
 
 ### Weitere Ideen
 - [ ] Drag & Drop zum Verschieben von Notizen zwischen Tagen
@@ -82,6 +105,7 @@
 
 ## Completed (Recent)
 
+- [x] v1.17.17: Strikte Filter-Validierung (unbekannte Funktionen → Fehler)
 - [x] v1.17.16: Bases-kompatibles `filters` alias
 - [x] v1.17.15: Array-Syntax für Filter (implizites AND)
 - [x] v1.17.14: Cross-year arc gap fix

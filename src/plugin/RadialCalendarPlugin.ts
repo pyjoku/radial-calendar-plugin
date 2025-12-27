@@ -12,6 +12,7 @@ import { LocalCalendarView, VIEW_TYPE_LOCAL_CALENDAR } from '../presentation/vie
 import { RadcalBlockProcessor } from '../presentation/codeblock/RadcalBlockProcessor';
 import { RadialCalendarSettingTab } from './RadialCalendarSettingTab';
 import { GoogleCalendarSync, SyncResult } from '../infrastructure/sync/GoogleCalendarSync';
+import { createRadialCalendarBasesView } from '../presentation/bases/RadialCalendarBasesView';
 import type { RadialCalendarSettings, LinearCalendarSettings, LocalDate } from '../core/domain/types';
 import { DEFAULT_RADIAL_SETTINGS, createLocalDate } from '../core/domain/types';
 
@@ -91,6 +92,9 @@ export class RadialCalendarPlugin extends Plugin {
       'radcal',
       (source, el, ctx) => blockProcessor.process(source, el, ctx)
     );
+
+    // Register Bases view (Obsidian 1.10+)
+    this.registerBasesViewIfAvailable();
 
     // Add settings tab
     this.addSettingTab(new RadialCalendarSettingTab(this.app, this));
@@ -343,6 +347,57 @@ export class RadialCalendarPlugin extends Plugin {
       if (result.errors.length > 0) {
         console.warn(`Calendar sync errors (${result.calendarName}):`, result.errors);
       }
+    }
+  }
+
+  /**
+   * Register Bases view if the API is available (Obsidian 1.10+)
+   */
+  private registerBasesViewIfAvailable(): void {
+    // Check if registerBasesView API exists
+    if (typeof this.registerBasesView !== 'function') {
+      console.log('Radial Calendar: Bases API not available (requires Obsidian 1.10+)');
+      return;
+    }
+
+    try {
+      const registered = this.registerBasesView('radial-calendar', {
+        name: 'Radial Calendar',
+        icon: 'circle',
+        factory: createRadialCalendarBasesView,
+        options: () => [
+          {
+            type: 'text',
+            key: 'dateProperty',
+            name: 'Date property',
+            description: 'The property to use for positioning entries on the calendar',
+            default: 'date',
+          },
+          {
+            type: 'dropdown',
+            key: 'color',
+            name: 'Color',
+            description: 'Color for entry indicators',
+            default: 'blue',
+            options: [
+              { value: 'blue', label: 'Blue' },
+              { value: 'green', label: 'Green' },
+              { value: 'red', label: 'Red' },
+              { value: 'purple', label: 'Purple' },
+              { value: 'orange', label: 'Orange' },
+              { value: 'teal', label: 'Teal' },
+              { value: 'pink', label: 'Pink' },
+              { value: 'yellow', label: 'Yellow' },
+            ],
+          },
+        ],
+      });
+
+      if (registered) {
+        console.log('Radial Calendar: Bases view registered successfully');
+      }
+    } catch (error) {
+      console.warn('Radial Calendar: Failed to register Bases view:', error);
     }
   }
 }

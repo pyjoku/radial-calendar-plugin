@@ -759,3 +759,131 @@
 .radcal-block .rc-day-arc[style*="cursor: pointer"]:hover {
   filter: brightness(1.3);
 }
+
+/* ========================================
+   Bases View Styles (Obsidian 1.10+)
+   ======================================== */
+
+.radial-calendar-bases-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  height: 100%;
+}
+
+.rc-bases-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rc-bases-nav-btn {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: background 0.15s ease;
+}
+
+.rc-bases-nav-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.rc-bases-year {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-normal);
+  min-width: 60px;
+  text-align: center;
+}
+
+.rc-bases-today-btn {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.rc-bases-today-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.rc-bases-svg-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 600px;
+}
+
+.rc-bases-calendar {
+  width: 100%;
+  height: auto;
+}
+
+/* SVG Elements */
+.rc-bases-background {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 2;
+}
+
+.rc-bases-month-separator {
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.rc-bases-month-label {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.rc-bases-entry-indicator {
+  cursor: pointer;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.rc-bases-entry-indicator:hover {
+  filter: brightness(1.2);
+}
+
+.rc-bases-today-marker {
+  stroke: var(--text-error);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.rc-bases-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.rc-bases-center-text {
+  font-size: 28px;
+  font-weight: 700;
+  fill: var(--text-normal);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.rc-bases-entry-count {
+  font-size: 12px;
+  fill: var(--text-muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
