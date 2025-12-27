@@ -1269,13 +1269,13 @@ export class RadialCalendarView extends ItemView {
           this.renderSpanningArc(svg, arc, arcRadii, ring, ringColor);
         }
       } else if (hasSpanningArcs && hasDailyNotes) {
-        // Both: dynamic allocation
+        // Both: dynamic allocation based on track count
+        // Each track gets ~15% of ring height, max 60% for arcs
+        const TRACK_HEIGHT_PERCENT = 0.15;
         const ARCS_MAX_PERCENT = 0.60;
         const DAILY_MIN_PERCENT = 0.40;
-        const BASE_ARCS_PERCENT = 0.50;
 
-        // Each additional track beyond 1 adds 5% up to max
-        const desiredArcsPercent = BASE_ARCS_PERCENT + (trackCount - 1) * 0.05;
+        const desiredArcsPercent = trackCount * TRACK_HEIGHT_PERCENT;
         const arcsHeight = Math.min(ARCS_MAX_PERCENT, desiredArcsPercent);
         const dailyNotesHeight = Math.max(DAILY_MIN_PERCENT, 1 - arcsHeight);
 
