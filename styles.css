@@ -1,0 +1,236 @@
+/**
+ * Radial Calendar Plugin - Styles
+ * A circular/radial visualization of the calendar year
+ */
+
+/* Container */
+.radial-calendar-plugin {
+  height: 100%;
+  overflow: auto;
+  background: var(--background-primary);
+}
+
+.rc-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+}
+
+/* Header */
+.rc-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.rc-year-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-normal);
+  min-width: 80px;
+  text-align: center;
+}
+
+.rc-nav-btn {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-normal);
+  font-size: 14px;
+  transition: background 0.15s ease;
+}
+
+.rc-nav-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.rc-today-btn {
+  margin-left: 16px;
+}
+
+/* SVG Wrapper */
+.rc-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.rc-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 800px;
+  max-height: 800px;
+}
+
+/* Background Circle */
+.rc-background {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 2;
+}
+
+/* Center Circle */
+.rc-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+/* Month Labels */
+.rc-month-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Month Separator Lines */
+.rc-month-separator {
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+/* Day Arcs */
+.rc-day-arc {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 0.5;
+  cursor: pointer;
+  transition: fill 0.15s ease;
+}
+
+.rc-day-arc:hover {
+  fill: var(--background-modifier-hover);
+}
+
+.rc-day-arc--weekend {
+  fill: var(--background-secondary-alt);
+}
+
+.rc-day-arc--weekend:hover {
+  fill: var(--background-modifier-hover);
+}
+
+.rc-day-arc--today {
+  fill: var(--interactive-accent);
+  fill-opacity: 0.3;
+}
+
+.rc-day-arc--today:hover {
+  fill: var(--interactive-accent);
+  fill-opacity: 0.5;
+}
+
+.rc-day-arc--has-notes {
+  fill: var(--text-accent);
+  fill-opacity: 0.15;
+}
+
+.rc-day-arc--has-notes:hover {
+  fill: var(--text-accent);
+  fill-opacity: 0.3;
+}
+
+.rc-day-arc--many-notes {
+  fill: var(--text-accent);
+  fill-opacity: 0.25;
+}
+
+/* Note Indicators */
+.rc-note-indicator {
+  fill: var(--text-accent);
+  fill-opacity: 0.8;
+  pointer-events: none;
+}
+
+/* Today Marker Line */
+.rc-today-marker {
+  stroke: var(--text-error);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Tooltip */
+.rc-tooltip {
+  position: absolute;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  max-width: 250px;
+  pointer-events: none;
+}
+
+.rc-tooltip-date {
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.rc-tooltip-notes {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 6px;
+  margin-top: 6px;
+}
+
+.rc-tooltip-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-tooltip-more {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* Dark theme adjustments */
+.theme-dark .rc-day-arc {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .rc-month-separator {
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+/* Light theme adjustments */
+.theme-light .rc-day-arc {
+  stroke: rgba(0, 0, 0, 0.1);
+}
+
+.theme-light .rc-month-separator {
+  stroke: rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .rc-year-title {
+    font-size: 20px;
+  }
+
+  .rc-nav-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .rc-month-label {
+    font-size: 10px;
+  }
+}
