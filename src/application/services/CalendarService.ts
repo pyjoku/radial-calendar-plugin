@@ -362,10 +362,10 @@ export class CalendarService {
     const today = getToday();
 
     return phases.map((phase) => {
-      // Calculate start angle (0 = top, clockwise)
+      // Calculate start angle (0 radians = right, will be rotated by createArcPath to 12 o'clock)
       const startYearFraction = this.dateToYearFraction(phase.startDate);
       const startYearsFromBirth = (phase.startDate.year - birthYear) + startYearFraction;
-      const startAngle = (startYearsFromBirth / totalYears) * 2 * Math.PI - Math.PI / 2;
+      const startAngle = (startYearsFromBirth / totalYears) * 2 * Math.PI;
 
       // Calculate end angle
       let endYearFraction: number;
@@ -383,14 +383,14 @@ export class CalendarService {
       }
 
       const endYearsFromBirth = (endDate.year - birthYear) + endYearFraction;
-      const endAngle = (endYearsFromBirth / totalYears) * 2 * Math.PI - Math.PI / 2;
+      const endAngle = (endYearsFromBirth / totalYears) * 2 * Math.PI;
 
       // Calculate today angle for ongoing phases
       let todayAngle: number | undefined;
       if (isOngoing) {
         const todayYearFraction = this.dateToYearFraction(today);
         const todayYearsFromBirth = (today.year - birthYear) + todayYearFraction;
-        todayAngle = (todayYearsFromBirth / totalYears) * 2 * Math.PI - Math.PI / 2;
+        todayAngle = (todayYearsFromBirth / totalYears) * 2 * Math.PI;
       }
 
       // Get hex color
