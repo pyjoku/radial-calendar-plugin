@@ -5,17 +5,19 @@
  * It handles plugin lifecycle and integrates with Obsidian.
  */
 
-import { Plugin, WorkspaceLeaf, TFile } from 'obsidian';
+import { Plugin, WorkspaceLeaf, TFile, Notice } from 'obsidian';
 import { CalendarService } from '../application/services/CalendarService';
 import { RadialCalendarView, VIEW_TYPE_RADIAL_CALENDAR } from '../presentation/views/RadialCalendarView';
 import { LocalCalendarView, VIEW_TYPE_LOCAL_CALENDAR } from '../presentation/views/LocalCalendarView';
 import { RadcalBlockProcessor } from '../presentation/codeblock/RadcalBlockProcessor';
 import { RadialCalendarSettingTab } from './RadialCalendarSettingTab';
+import { GoogleCalendarSync, SyncResult } from '../infrastructure/sync/GoogleCalendarSync';
 import type { RadialCalendarSettings, LinearCalendarSettings, LocalDate } from '../core/domain/types';
 import { DEFAULT_RADIAL_SETTINGS, createLocalDate } from '../core/domain/types';
 
 export class RadialCalendarPlugin extends Plugin {
   private service: CalendarService | null = null;
+  private calendarSync: GoogleCalendarSync | null = null;
   settings: RadialCalendarSettings = { ...DEFAULT_RADIAL_SETTINGS };
 
   async onload(): Promise<void> {
@@ -120,9 +122,29 @@ export class RadialCalendarPlugin extends Plugin {
         this.activateLocalCalendarView();
       },
     });
+
+    // Initialize Google Calendar sync
+    this.calendarSync = new GoogleCalendarSync(this.app);
+
+    // Add sync command
+    this.addCommand({
+      id: 'sync-google-calendars',
+      name: 'Sync Google Calendars',
+      callback: () => {
+        this.syncAllCalendars();
+      },
+    });
+
+    // Auto-sync on start for calendars with syncOnStart enabled
+    this.syncOnStart();
+
+    // Start auto-sync intervals
+    this.startAutoSync();
   }
 
   async onunload(): Promise<void> {
+    this.calendarSync?.stopAutoSync();
+    this.calendarSync = null;
     this.service?.destroy();
     this.service = null;
   }
@@ -193,6 +215,134 @@ export class RadialCalendarPlugin extends Plugin {
 
     if (leaf) {
       workspace.revealLeaf(leaf);
+    }
+  }
+
+  /**
+   * Sync all enabled calendars manually
+   */
+  async syncAllCalendars(): Promise<void> {
+    if (!this.calendarSync) return;
+
+    const enabledSources = this.settings.calendarSources.filter(s => s.enabled && s.url);
+    if (enabledSources.length === 0) {
+      new Notice('No calendar sources configured');
+      return;
+    }
+
+    new Notice(`Syncing ${enabledSources.length} calendar(s)...`);
+
+    const results = await this.calendarSync.syncAllCalendars(enabledSources);
+    this.showSyncResults(results);
+
+    // Update lastSync timestamps
+    for (const result of results) {
+      if (result.success) {
+        const source = this.settings.calendarSources.find(s => s.id === result.calendarId);
+        if (source) {
+          source.lastSync = Date.now();
+        }
+      }
+    }
+    await this.saveSettings();
+
+    // Refresh calendar data
+    await this.service?.initialize();
+  }
+
+  /**
+   * Sync calendars that have syncOnStart enabled
+   */
+  private async syncOnStart(): Promise<void> {
+    if (!this.calendarSync) return;
+
+    const onStartSources = this.settings.calendarSources.filter(
+      s => s.enabled && s.url && s.syncOnStart
+    );
+
+    if (onStartSources.length === 0) return;
+
+    // Delay slightly to let Obsidian fully initialize
+    setTimeout(async () => {
+      const results = await this.calendarSync!.syncAllCalendars(onStartSources);
+
+      // Update lastSync timestamps
+      for (const result of results) {
+        if (result.success) {
+          const source = this.settings.calendarSources.find(s => s.id === result.calendarId);
+          if (source) {
+            source.lastSync = Date.now();
+          }
+        }
+      }
+      await this.saveSettings();
+
+      // Show summary
+      const successCount = results.filter(r => r.success).length;
+      const totalEvents = results.reduce((sum, r) => sum + r.eventsCreated + r.eventsUpdated, 0);
+      if (totalEvents > 0) {
+        new Notice(`Calendar sync: ${totalEvents} events updated from ${successCount} calendar(s)`);
+      }
+
+      // Refresh calendar data
+      await this.service?.initialize();
+    }, 2000);
+  }
+
+  /**
+   * Start auto-sync intervals for calendars
+   */
+  private startAutoSync(): void {
+    if (!this.calendarSync) return;
+
+    const intervalSources = this.settings.calendarSources.filter(
+      s => s.enabled && s.url && s.syncIntervalMinutes > 0
+    );
+
+    if (intervalSources.length === 0) return;
+
+    this.calendarSync.startAutoSync(intervalSources, async (result) => {
+      // Update lastSync timestamp
+      if (result.success) {
+        const source = this.settings.calendarSources.find(s => s.id === result.calendarId);
+        if (source) {
+          source.lastSync = Date.now();
+          await this.saveSettings();
+        }
+      }
+
+      // Show notification if events were updated
+      const totalUpdated = result.eventsCreated + result.eventsUpdated;
+      if (totalUpdated > 0) {
+        new Notice(`${result.calendarName}: ${totalUpdated} events synced`);
+      }
+
+      // Refresh calendar data
+      await this.service?.initialize();
+    });
+  }
+
+  /**
+   * Show sync results notification
+   */
+  private showSyncResults(results: SyncResult[]): void {
+    const successCount = results.filter(r => r.success).length;
+    const totalCreated = results.reduce((sum, r) => sum + r.eventsCreated, 0);
+    const totalUpdated = results.reduce((sum, r) => sum + r.eventsUpdated, 0);
+    const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+
+    let message = `Sync complete: ${successCount}/${results.length} calendars`;
+    if (totalCreated > 0) message += `, ${totalCreated} created`;
+    if (totalUpdated > 0) message += `, ${totalUpdated} updated`;
+    if (totalErrors > 0) message += `, ${totalErrors} errors`;
+
+    new Notice(message);
+
+    // Log errors to console
+    for (const result of results) {
+      if (result.errors.length > 0) {
+        console.warn(`Calendar sync errors (${result.calendarName}):`, result.errors);
+      }
     }
   }
 }

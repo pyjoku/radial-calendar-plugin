@@ -18,6 +18,7 @@ import type {
   AnnualSegmentType,
   OuterSegmentConfig,
   LifeActConfig,
+  CalendarSourceConfig,
 } from '../core/domain/types';
 import {
   DEFAULT_RADIAL_SETTINGS,
@@ -57,6 +58,9 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
 
     // Daily Notes Section
     this.createDailyNotesSection(containerEl);
+
+    // Calendar Sync Section
+    this.createCalendarSyncSection(containerEl);
 
     // Ring Configuration Section
     this.createRingConfigSection(containerEl);
@@ -298,6 +302,207 @@ Birthday: 1982-09-24<br>
         </code>
       </p>
     `;
+  }
+
+  /**
+   * Creates the calendar sync section
+   */
+  private createCalendarSyncSection(containerEl: HTMLElement): void {
+    containerEl.createEl('h3', { text: 'Calendar Sync (Google Calendar)' });
+
+    const sources = this.plugin.settings.calendarSources || [];
+
+    // Render existing calendar sources
+    sources.forEach((source, index) => {
+      this.createCalendarSourceSettings(containerEl, source, index);
+    });
+
+    // Add calendar source button
+    new Setting(containerEl)
+      .setName('Add Calendar Source')
+      .setDesc('Add a new Google Calendar or iCal source')
+      .addButton((button) => {
+        button
+          .setButtonText('+ Add Calendar')
+          .setCta()
+          .onClick(async () => {
+            const newSource: CalendarSourceConfig = {
+              id: `gcal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              name: 'New Calendar',
+              url: '',
+              folder: 'Calendar/Google',
+              color: 'blue',
+              syncOnStart: true,
+              syncIntervalMinutes: 0,
+              enabled: true,
+            };
+            if (!this.plugin.settings.calendarSources) {
+              this.plugin.settings.calendarSources = [];
+            }
+            this.plugin.settings.calendarSources.push(newSource);
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    // Help text
+    const helpDiv = containerEl.createDiv({ cls: 'setting-item-description' });
+    helpDiv.innerHTML = `
+      <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+        <strong>How to get your Google Calendar URL:</strong><br>
+        1. Open Google Calendar → Settings → Calendar Settings<br>
+        2. Select your calendar → Integrate calendar<br>
+        3. Copy "Secret address in iCal format"<br><br>
+        <em>Note: This URL is private and contains a secret key. Never share it publicly.</em>
+      </p>
+    `;
+  }
+
+  /**
+   * Creates settings for a single calendar source
+   */
+  private createCalendarSourceSettings(
+    containerEl: HTMLElement,
+    source: CalendarSourceConfig,
+    index: number
+  ): void {
+    const sourceContainer = containerEl.createDiv({ cls: 'radial-calendar-source-config' });
+
+    // Header with name and delete button
+    new Setting(sourceContainer)
+      .setName(`Calendar ${index + 1}: ${source.name}`)
+      .setHeading()
+      .addButton((button) => {
+        button
+          .setIcon('trash')
+          .setWarning()
+          .setTooltip('Delete this calendar source')
+          .onClick(async () => {
+            this.plugin.settings.calendarSources.splice(index, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    // Name
+    new Setting(sourceContainer)
+      .setName('Name')
+      .setDesc('Display name for this calendar')
+      .addText((text) => {
+        text
+          .setPlaceholder('e.g. Work Calendar')
+          .setValue(source.name)
+          .onChange(async (value) => {
+            source.name = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // URL (with hidden text)
+    new Setting(sourceContainer)
+      .setName('iCal URL')
+      .setDesc('Private iCal/ICS URL (from Google Calendar settings)')
+      .addText((text) => {
+        text
+          .setPlaceholder('https://calendar.google.com/calendar/ical/...')
+          .setValue(source.url)
+          .onChange(async (value) => {
+            source.url = value;
+            await this.plugin.saveSettings();
+          });
+        // Make URL field wider
+        text.inputEl.style.width = '100%';
+        text.inputEl.type = 'password'; // Hide URL for privacy
+      });
+
+    // Target folder
+    new Setting(sourceContainer)
+      .setName('Target Folder')
+      .setDesc('Where synced events will be saved')
+      .addText((text) => {
+        text
+          .setPlaceholder('e.g. Calendar/Google/Work')
+          .setValue(source.folder)
+          .onChange(async (value) => {
+            source.folder = value;
+            await this.plugin.saveSettings();
+          });
+        new FolderSuggest(this.app, text.inputEl);
+      });
+
+    // Color
+    new Setting(sourceContainer)
+      .setName('Color')
+      .setDesc('Color for this calendar in the radial view')
+      .addDropdown((dropdown) => {
+        Object.keys(RING_COLORS).forEach((colorName) => {
+          dropdown.addOption(colorName, colorName.charAt(0).toUpperCase() + colorName.slice(1));
+        });
+        dropdown
+          .setValue(source.color)
+          .onChange(async (value) => {
+            source.color = value as RingColorName;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Sync on start
+    new Setting(sourceContainer)
+      .setName('Sync on Start')
+      .setDesc('Automatically sync when Obsidian starts')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(source.syncOnStart)
+          .onChange(async (value) => {
+            source.syncOnStart = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Sync interval
+    new Setting(sourceContainer)
+      .setName('Auto-sync Interval')
+      .setDesc('How often to sync (0 = manual only)')
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('0', 'Manual only')
+          .addOption('15', 'Every 15 minutes')
+          .addOption('30', 'Every 30 minutes')
+          .addOption('60', 'Every hour')
+          .addOption('360', 'Every 6 hours')
+          .addOption('1440', 'Daily')
+          .setValue(String(source.syncIntervalMinutes))
+          .onChange(async (value) => {
+            source.syncIntervalMinutes = parseInt(value, 10);
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Enabled toggle
+    new Setting(sourceContainer)
+      .setName('Enabled')
+      .setDesc('Enable or disable this calendar source')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(source.enabled)
+          .onChange(async (value) => {
+            source.enabled = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Last sync info
+    if (source.lastSync) {
+      const lastSyncDate = new Date(source.lastSync);
+      const lastSyncStr = lastSyncDate.toLocaleString();
+      sourceContainer.createDiv({
+        cls: 'setting-item-description',
+        text: `Last synced: ${lastSyncStr}`,
+      });
+    }
+
+    // Divider
+    sourceContainer.createEl('hr');
   }
 
   /**

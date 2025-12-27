@@ -720,6 +720,45 @@ export interface RadialCalendarSettings {
    * Example: ["Birthday", "Todestag", "Hochzeitstag"]
    */
   anniversaryDateProperties: string[];
+
+  // ======== Calendar Sync ========
+
+  /**
+   * External calendar sources (Google Calendar, etc.)
+   */
+  calendarSources: CalendarSourceConfig[];
+}
+
+/**
+ * Configuration for an external calendar source
+ */
+export interface CalendarSourceConfig {
+  /** Unique identifier */
+  id: string;
+
+  /** Display name */
+  name: string;
+
+  /** iCal URL (private link) */
+  url: string;
+
+  /** Target folder for synced events */
+  folder: string;
+
+  /** Color for ring display */
+  color: RingColorName;
+
+  /** Sync on Obsidian start */
+  syncOnStart: boolean;
+
+  /** Sync interval in minutes (0 = manual only) */
+  syncIntervalMinutes: number;
+
+  /** Whether this source is enabled */
+  enabled: boolean;
+
+  /** Last sync timestamp */
+  lastSync?: number;
 }
 
 /**
@@ -1015,6 +1054,8 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
   showSegmentLabels: true,
   // Anniversary
   anniversaryDateProperties: [],
+  // Calendar sync
+  calendarSources: [],
 };
 
 /**
