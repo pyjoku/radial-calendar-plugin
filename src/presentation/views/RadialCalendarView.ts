@@ -1245,12 +1245,30 @@ export class RadialCalendarView extends ItemView {
       const arcsWithTracks = arcs.length > 0 ? assignTracks(arcs) : [];
       const trackCount = arcsWithTracks.length > 0 ? getMaxTrackCount(arcsWithTracks) : 0;
 
-      // Each arc track gets 10% of ring height, minimum 70% for daily notes
-      const arcHeightPercent = 0.10;
-      const totalArcHeight = Math.min(trackCount * arcHeightPercent, 0.30); // Max 30% for arcs
-      const dailyNotesHeight = 1 - totalArcHeight;
+      // Dynamic space allocation:
+      // - No arcs: 100% daily notes
+      // - With arcs: base 50/50 split
+      // - More overlapping tracks: arcs can grow up to 60% max (40% min for daily notes)
+      const ARCS_MAX_PERCENT = 0.60;
+      const DAILY_MIN_PERCENT = 0.40;
+      const BASE_ARCS_PERCENT = 0.50;
 
-      // Calculate radii for daily notes (bottom portion)
+      let arcsHeight: number;
+      let dailyNotesHeight: number;
+
+      if (trackCount === 0) {
+        // No spanning arcs: 100% for daily notes
+        arcsHeight = 0;
+        dailyNotesHeight = 1;
+      } else {
+        // Calculate arc height based on track count
+        // Each additional track beyond 1 adds 5% up to max
+        const desiredArcsPercent = BASE_ARCS_PERCENT + (trackCount - 1) * 0.05;
+        arcsHeight = Math.min(ARCS_MAX_PERCENT, desiredArcsPercent);
+        dailyNotesHeight = Math.max(DAILY_MIN_PERCENT, 1 - arcsHeight);
+      }
+
+      // Calculate radii for daily notes (bottom/inner portion)
       const dailyNotesRadii: RingRadii = {
         innerRadius: radii.innerRadius,
         outerRadius: radii.innerRadius + (ringHeight * dailyNotesHeight),
