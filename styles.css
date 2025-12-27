@@ -219,6 +219,102 @@
   stroke: rgba(0, 0, 0, 0.1);
 }
 
+/* View Mode Toggle */
+.rc-view-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  padding: 3px;
+  margin-left: 16px;
+}
+
+.rc-toggle-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.rc-toggle-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.rc-toggle-btn--active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.rc-toggle-btn--active:hover {
+  background: var(--interactive-accent-hover);
+  color: var(--text-on-accent);
+}
+
+/* Ring Name in Tooltip */
+.rc-tooltip-ring {
+  font-size: 11px;
+  color: var(--text-accent);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+/* Ring-specific arc styling */
+.rc-ring-arc {
+  fill-opacity: 0.6;
+  stroke-width: 0.5;
+  cursor: pointer;
+  transition: fill-opacity 0.15s ease;
+}
+
+.rc-ring-arc:hover {
+  fill-opacity: 0.85;
+}
+
+/* Ring separator */
+.rc-ring-separator {
+  fill: none;
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+  opacity: 0.3;
+}
+
+/* Outer Segment Ticks and Labels */
+.rc-segment-tick {
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.rc-segment-label {
+  font-size: 8px;
+  fill: var(--text-muted);
+  pointer-events: none;
+  font-weight: 500;
+}
+
+/* Settings: Segment and Life Act Config */
+.radial-calendar-segment-config,
+.radial-calendar-life-act-config {
+  margin-left: 16px;
+  padding: 8px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.radial-calendar-segment-config hr,
+.radial-calendar-life-act-config hr {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 12px 0 0 0;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .rc-year-title {
@@ -232,5 +328,14 @@
 
   .rc-month-label {
     font-size: 10px;
+  }
+
+  .rc-view-toggle {
+    margin-left: 8px;
+  }
+
+  .rc-toggle-btn {
+    padding: 4px 8px;
+    font-size: 11px;
   }
 }

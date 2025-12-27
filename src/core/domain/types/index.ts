@@ -400,6 +400,58 @@ export type RingStyle = 'solid' | 'striped' | 'dotted' | 'gradient';
 export type SegmentType = 'monthly' | 'weekly' | 'daily' | 'custom';
 
 /**
+ * Outer segment type for annual view
+ */
+export type AnnualSegmentType =
+  | 'none'       // No segments
+  | 'seasons'    // 4 seasons
+  | 'quarters'   // Q1-Q4
+  | 'semester'   // H1, H2
+  | 'ten-days'   // 36-37 ten-day phases
+  | 'weeks'      // 52 weeks
+  | 'custom';    // User-defined
+
+/**
+ * Configuration for an outer segment marker
+ */
+export interface OuterSegmentConfig {
+  /** Unique identifier */
+  readonly id: string;
+
+  /** Display label */
+  readonly label: string;
+
+  /** Start day of year (1-366) */
+  readonly startDay: number;
+
+  /** End day of year (1-366) */
+  readonly endDay: number;
+
+  /** Optional color for the tick */
+  readonly color?: RingColorName;
+}
+
+/**
+ * Configuration for a life act (life view)
+ */
+export interface LifeActConfig {
+  /** Unique identifier */
+  readonly id: string;
+
+  /** Display label */
+  readonly label: string;
+
+  /** Start age */
+  readonly startAge: number;
+
+  /** End age */
+  readonly endAge: number;
+
+  /** Optional color for the tick */
+  readonly color?: RingColorName;
+}
+
+/**
  * View mode for the radial calendar
  */
 export type RadialViewMode = 'annual' | 'life';
@@ -476,6 +528,20 @@ export interface RadialCalendarSettings {
 
   /** Template folder for generated templates */
   templateFolder: string;
+
+  // ======== Outer Segments (new) ========
+
+  /** Annual view segment type */
+  annualSegmentType: AnnualSegmentType;
+
+  /** Custom segments for annual view */
+  customSegments: OuterSegmentConfig[];
+
+  /** Life acts for life view */
+  lifeActs: LifeActConfig[];
+
+  /** Whether to show segment labels */
+  showSegmentLabels: boolean;
 }
 
 /**
@@ -546,6 +612,79 @@ export function createDefaultRing(order: number): RingConfig {
   };
 }
 
+// ============================================================================
+// Predefined Outer Segments
+// ============================================================================
+
+/**
+ * Seasons (meteorological, Northern Hemisphere)
+ */
+export const PREDEFINED_SEASONS: OuterSegmentConfig[] = [
+  { id: 'spring', label: 'Frühling', startDay: 60, endDay: 152 },   // 1 Mar - 31 May
+  { id: 'summer', label: 'Sommer', startDay: 152, endDay: 244 },    // 1 Jun - 31 Aug
+  { id: 'autumn', label: 'Herbst', startDay: 244, endDay: 335 },    // 1 Sep - 30 Nov
+  { id: 'winter', label: 'Winter', startDay: 335, endDay: 60 },     // 1 Dec - 28 Feb (wraps)
+];
+
+/**
+ * Quarters (Q1-Q4)
+ */
+export const PREDEFINED_QUARTERS: OuterSegmentConfig[] = [
+  { id: 'q1', label: 'Q1', startDay: 1, endDay: 90 },
+  { id: 'q2', label: 'Q2', startDay: 91, endDay: 181 },
+  { id: 'q3', label: 'Q3', startDay: 182, endDay: 273 },
+  { id: 'q4', label: 'Q4', startDay: 274, endDay: 365 },
+];
+
+/**
+ * Semesters (H1, H2)
+ */
+export const PREDEFINED_SEMESTERS: OuterSegmentConfig[] = [
+  { id: 's1', label: 'H1', startDay: 1, endDay: 181 },
+  { id: 's2', label: 'H2', startDay: 182, endDay: 365 },
+];
+
+/**
+ * Generate 10-day phases for a year
+ */
+export function generate10DayPhases(): OuterSegmentConfig[] {
+  const phases: OuterSegmentConfig[] = [];
+  let dayOfYear = 1;
+  let phaseNum = 1;
+
+  while (dayOfYear <= 365) {
+    const endDay = Math.min(dayOfYear + 9, 365);
+    phases.push({
+      id: `10d-${phaseNum}`,
+      label: `P${phaseNum}`,
+      startDay: dayOfYear,
+      endDay: endDay,
+    });
+    dayOfYear = endDay + 1;
+    phaseNum++;
+  }
+
+  return phases;
+}
+
+/**
+ * Generate week segments for a year
+ */
+export function generateWeekSegments(): OuterSegmentConfig[] {
+  const weeks: OuterSegmentConfig[] = [];
+  for (let week = 1; week <= 52; week++) {
+    const startDay = (week - 1) * 7 + 1;
+    const endDay = Math.min(week * 7, 365);
+    weeks.push({
+      id: `kw-${week}`,
+      label: `KW${week}`,
+      startDay,
+      endDay,
+    });
+  }
+  return weeks;
+}
+
 /**
  * Default Radial Calendar settings
  */
@@ -562,6 +701,11 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
     daily: 'YYYY-MM-DD',
   },
   templateFolder: 'Templates',
+  // Outer segments
+  annualSegmentType: 'none',
+  customSegments: [],
+  lifeActs: [],
+  showSegmentLabels: true,
 };
 
 /**

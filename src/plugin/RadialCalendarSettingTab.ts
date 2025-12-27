@@ -15,6 +15,9 @@ import type {
   RadialCalendarSettings,
   RingConfig,
   RingColorName,
+  AnnualSegmentType,
+  OuterSegmentConfig,
+  LifeActConfig,
 } from '../core/domain/types';
 import {
   DEFAULT_RADIAL_SETTINGS,
@@ -54,6 +57,9 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
 
     // Ring Configuration Section
     this.createRingConfigSection(containerEl);
+
+    // Outer Segments Section
+    this.createOuterSegmentsSection(containerEl);
 
     // Template Section
     this.createTemplateSection(containerEl);
@@ -246,6 +252,283 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
   private formatColorName(colorName: string): string {
     // Capitalize first letter
     return colorName.charAt(0).toUpperCase() + colorName.slice(1);
+  }
+
+  /**
+   * Creates the outer segments section
+   */
+  private createOuterSegmentsSection(containerEl: HTMLElement): void {
+    containerEl.createEl('h3', { text: 'Äußere Segmente' });
+
+    // Segment type dropdown
+    new Setting(containerEl)
+      .setName('Segment-Typ')
+      .setDesc('Markierungen am äußeren Rand des Kalenders')
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('none', 'Keine')
+          .addOption('seasons', 'Jahreszeiten (4)')
+          .addOption('quarters', 'Quartale (4)')
+          .addOption('semester', 'Semester (2)')
+          .addOption('ten-days', '10-Tages-Phasen (36)')
+          .addOption('weeks', 'Wochen (52)')
+          .addOption('custom', 'Benutzerdefiniert')
+          .setValue(this.plugin.settings.annualSegmentType)
+          .onChange(async (value) => {
+            this.plugin.settings.annualSegmentType = value as AnnualSegmentType;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    // Show labels toggle
+    new Setting(containerEl)
+      .setName('Labels anzeigen')
+      .setDesc('Segment-Beschriftungen anzeigen')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.showSegmentLabels)
+          .onChange(async (value) => {
+            this.plugin.settings.showSegmentLabels = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Custom segments editor (only if custom is selected)
+    if (this.plugin.settings.annualSegmentType === 'custom') {
+      this.createCustomSegmentsEditor(containerEl);
+    }
+
+    // Life acts editor (only if life view is active)
+    if (this.plugin.settings.currentView === 'life') {
+      this.createLifeActsEditor(containerEl);
+    }
+  }
+
+  /**
+   * Creates the custom segments editor
+   */
+  private createCustomSegmentsEditor(containerEl: HTMLElement): void {
+    containerEl.createEl('h4', { text: 'Benutzerdefinierte Segmente' });
+
+    const segments = this.plugin.settings.customSegments;
+
+    segments.forEach((segment, index) => {
+      this.createSegmentSettings(containerEl, segment, index);
+    });
+
+    // Add segment button
+    new Setting(containerEl)
+      .addButton((button) => {
+        button
+          .setButtonText('Segment hinzufügen')
+          .onClick(async () => {
+            const newSegment: OuterSegmentConfig = {
+              id: `seg-${Date.now()}`,
+              label: `Segment ${segments.length + 1}`,
+              startDay: 1,
+              endDay: 30,
+            };
+            this.plugin.settings.customSegments = [...segments, newSegment];
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+  }
+
+  /**
+   * Creates settings for a single custom segment
+   */
+  private createSegmentSettings(
+    containerEl: HTMLElement,
+    segment: OuterSegmentConfig,
+    index: number
+  ): void {
+    const segmentContainer = containerEl.createDiv({ cls: 'radial-calendar-segment-config' });
+
+    new Setting(segmentContainer)
+      .setName('Label')
+      .addText((text) => {
+        text
+          .setValue(segment.label)
+          .onChange(async (value) => {
+            this.updateSegment(index, { label: value });
+          });
+      });
+
+    new Setting(segmentContainer)
+      .setName('Start-Tag')
+      .setDesc('Tag des Jahres (1-365)')
+      .addText((text) => {
+        text
+          .setValue(String(segment.startDay))
+          .onChange(async (value) => {
+            const day = parseInt(value, 10);
+            if (!isNaN(day) && day >= 1 && day <= 365) {
+              this.updateSegment(index, { startDay: day });
+            }
+          });
+      });
+
+    new Setting(segmentContainer)
+      .setName('End-Tag')
+      .setDesc('Tag des Jahres (1-365)')
+      .addText((text) => {
+        text
+          .setValue(String(segment.endDay))
+          .onChange(async (value) => {
+            const day = parseInt(value, 10);
+            if (!isNaN(day) && day >= 1 && day <= 365) {
+              this.updateSegment(index, { endDay: day });
+            }
+          });
+      });
+
+    new Setting(segmentContainer)
+      .addButton((button) => {
+        button
+          .setButtonText('Löschen')
+          .setWarning()
+          .onClick(async () => {
+            this.plugin.settings.customSegments = this.plugin.settings.customSegments.filter(
+              (_, i) => i !== index
+            );
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    segmentContainer.createEl('hr');
+  }
+
+  /**
+   * Updates a custom segment
+   */
+  private async updateSegment(index: number, updates: Partial<OuterSegmentConfig>): Promise<void> {
+    const segments = [...this.plugin.settings.customSegments];
+    segments[index] = { ...segments[index], ...updates };
+    this.plugin.settings.customSegments = segments;
+    await this.plugin.saveSettings();
+  }
+
+  /**
+   * Creates the life acts editor
+   */
+  private createLifeActsEditor(containerEl: HTMLElement): void {
+    containerEl.createEl('h4', { text: 'Lebensakte' });
+
+    const lifeActs = this.plugin.settings.lifeActs;
+
+    lifeActs.forEach((act, index) => {
+      this.createLifeActSettings(containerEl, act, index);
+    });
+
+    // Add life act button
+    new Setting(containerEl)
+      .addButton((button) => {
+        button
+          .setButtonText('Lebensakt hinzufügen')
+          .onClick(async () => {
+            const newAct: LifeActConfig = {
+              id: `act-${Date.now()}`,
+              label: `Akt ${lifeActs.length + 1}`,
+              startAge: 0,
+              endAge: 10,
+            };
+            this.plugin.settings.lifeActs = [...lifeActs, newAct];
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+  }
+
+  /**
+   * Creates settings for a single life act
+   */
+  private createLifeActSettings(
+    containerEl: HTMLElement,
+    act: LifeActConfig,
+    index: number
+  ): void {
+    const actContainer = containerEl.createDiv({ cls: 'radial-calendar-life-act-config' });
+
+    new Setting(actContainer)
+      .setName('Bezeichnung')
+      .addText((text) => {
+        text
+          .setPlaceholder('z.B. Kindheit')
+          .setValue(act.label)
+          .onChange(async (value) => {
+            this.updateLifeAct(index, { label: value });
+          });
+      });
+
+    new Setting(actContainer)
+      .setName('Start-Alter')
+      .addText((text) => {
+        text
+          .setValue(String(act.startAge))
+          .onChange(async (value) => {
+            const age = parseInt(value, 10);
+            if (!isNaN(age) && age >= 0) {
+              this.updateLifeAct(index, { startAge: age });
+            }
+          });
+      });
+
+    new Setting(actContainer)
+      .setName('End-Alter')
+      .addText((text) => {
+        text
+          .setValue(String(act.endAge))
+          .onChange(async (value) => {
+            const age = parseInt(value, 10);
+            if (!isNaN(age) && age >= 0) {
+              this.updateLifeAct(index, { endAge: age });
+            }
+          });
+      });
+
+    // Color dropdown (optional)
+    new Setting(actContainer)
+      .setName('Farbe')
+      .addDropdown((dropdown) => {
+        dropdown.addOption('', '(Standard)');
+        Object.keys(RING_COLORS).forEach((colorName) => {
+          dropdown.addOption(colorName, this.formatColorName(colorName));
+        });
+        dropdown
+          .setValue(act.color || '')
+          .onChange(async (value) => {
+            this.updateLifeAct(index, { color: value as RingColorName || undefined });
+          });
+      });
+
+    new Setting(actContainer)
+      .addButton((button) => {
+        button
+          .setButtonText('Löschen')
+          .setWarning()
+          .onClick(async () => {
+            this.plugin.settings.lifeActs = this.plugin.settings.lifeActs.filter(
+              (_, i) => i !== index
+            );
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    actContainer.createEl('hr');
+  }
+
+  /**
+   * Updates a life act
+   */
+  private async updateLifeAct(index: number, updates: Partial<LifeActConfig>): Promise<void> {
+    const acts = [...this.plugin.settings.lifeActs];
+    acts[index] = { ...acts[index], ...updates };
+    this.plugin.settings.lifeActs = acts;
+    await this.plugin.saveSettings();
   }
 
   /**

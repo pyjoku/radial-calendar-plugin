@@ -22,11 +22,14 @@ export class RadialCalendarPlugin extends Plugin {
 
     // Initialize service with legacy settings for now
     const legacySettings: LinearCalendarSettings = {
+      calendarWidth: 'fit',
       dateProperties: ['date', 'created', 'due'],
       endDateProperties: ['endDate', 'end', 'until'],
       datePriority: 'filename',
       dailyNoteFormat: this.settings.periodicNotesFormat.daily,
       dailyNoteFolder: '',
+      showMultiDayBars: true,
+      showWeekendHighlight: true,
     };
     this.service = new CalendarService(this.app, legacySettings);
     await this.service.initialize();
@@ -41,6 +44,11 @@ export class RadialCalendarPlugin extends Plugin {
           if (file instanceof TFile) {
             await this.app.workspace.getLeaf().openFile(file);
           }
+        },
+        settings: this.settings,
+        onSettingsChange: async (settings: RadialCalendarSettings) => {
+          this.settings = settings;
+          await this.saveSettings();
         },
       });
       return view;
