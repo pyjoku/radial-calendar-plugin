@@ -644,7 +644,7 @@ export class RadialCalendarView extends ItemView {
     let content = `<div class="rc-tooltip-date">${phase.label}</div>`;
 
     if (phase.isOngoing) {
-      content += '<div class="rc-tooltip-note" style="color: var(--text-accent);">Aktiv (ongoing)</div>';
+      content += '<div class="rc-tooltip-note" style="color: var(--text-accent);">Active (ongoing)</div>';
     }
 
     this.tooltipEl.innerHTML = content;

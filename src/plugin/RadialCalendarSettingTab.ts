@@ -76,12 +76,12 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
    */
   private createViewModeSection(containerEl: HTMLElement): void {
     new Setting(containerEl)
-      .setName('Ansichtsmodus')
-      .setDesc('Wechseln zwischen Jahres- und Lebensansicht')
+      .setName('View Mode')
+      .setDesc('Switch between Annual and Life view')
       .addDropdown((dropdown) => {
         dropdown
-          .addOption('annual', 'Jahresansicht')
-          .addOption('life', 'Lebensansicht')
+          .addOption('annual', 'Annual View')
+          .addOption('life', 'Life View')
           .setValue(this.plugin.settings.currentView)
           .onChange(async (value) => {
             this.plugin.settings.currentView = value as 'annual' | 'life';
@@ -96,14 +96,14 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
    * Creates the life view settings section
    */
   private createLifeViewSection(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Lebensansicht Einstellungen' });
+    containerEl.createEl('h3', { text: 'Life View Settings' });
 
     new Setting(containerEl)
-      .setName('Geburtsdatum')
-      .setDesc('Dein Geburtsdatum (YYYY-MM-DD) für präzise Berechnung')
+      .setName('Birth Date')
+      .setDesc('Your birth date (YYYY-MM-DD) for precise calculation')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. 1977-03-27')
+          .setPlaceholder('e.g. 1977-03-27')
           .setValue(this.plugin.settings.birthDate || '')
           .onChange(async (value) => {
             // Validate date format
@@ -127,11 +127,11 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName('Geburtsjahr (Fallback)')
-      .setDesc('Wird verwendet wenn kein vollständiges Datum angegeben')
+      .setName('Birth Year (Fallback)')
+      .setDesc('Used when no full date is provided')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. 1990')
+          .setPlaceholder('e.g. 1990')
           .setValue(String(this.plugin.settings.birthYear))
           .onChange(async (value) => {
             const year = parseInt(value, 10);
@@ -143,11 +143,11 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName('Erwartete Lebensspanne')
-      .setDesc('Erwartete Lebensdauer in Jahren')
+      .setName('Expected Lifespan')
+      .setDesc('Expected lifespan in years')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. 85')
+          .setPlaceholder('e.g. 85')
           .setValue(String(this.plugin.settings.expectedLifespan))
           .onChange(async (value) => {
             const lifespan = parseInt(value, 10);
@@ -159,14 +159,14 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
       });
 
     // Life Phases Section
-    containerEl.createEl('h4', { text: 'Lebensphasen' });
+    containerEl.createEl('h4', { text: 'Life Phases' });
 
     new Setting(containerEl)
-      .setName('Lebensphasen-Ordner')
-      .setDesc('Ordner mit Lebensphasen-Notizen (YAML: phase-start, phase-end, phase-color, phase-label)')
+      .setName('Life Phases Folder')
+      .setDesc('Folder with life phase notes (YAML: phase-start, phase-end, phase-color, phase-label)')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. Life/Phases')
+          .setPlaceholder('e.g. Life/Phases')
           .setValue(this.plugin.settings.lifePhasesFolder)
           .onChange(async (value) => {
             this.plugin.settings.lifePhasesFolder = value;
@@ -179,17 +179,17 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
     const helpDiv = containerEl.createDiv({ cls: 'setting-item-description' });
     helpDiv.innerHTML = `
       <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
-        <strong>Beispiel YAML für eine Lebensphase:</strong><br>
+        <strong>Example YAML for a life phase:</strong><br>
         <code style="display: block; padding: 8px; background: var(--background-secondary); border-radius: 4px; margin-top: 4px;">
 ---<br>
 phase-start: 1983-09-01<br>
 phase-end: 1987-07-15<br>
 phase-color: blue<br>
-phase-label: Grundschule<br>
+phase-label: Elementary School<br>
 ---
         </code>
         <br>
-        <em>Leer lassen für "ongoing" (aktuelle Phasen zeigen Gradient bis Lebensende)</em>
+        <em>Leave end empty for "ongoing" phases (shows faded arc until life expectancy)</em>
       </p>
     `;
   }
@@ -198,14 +198,14 @@ phase-label: Grundschule<br>
    * Creates the daily notes section
    */
   private createDailyNotesSection(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Tägliche Notizen' });
+    containerEl.createEl('h3', { text: 'Daily Notes' });
 
     new Setting(containerEl)
-      .setName('Notizen-Ordner')
-      .setDesc('Ordner, in dem neue Notizen erstellt werden (leer = Root)')
+      .setName('Notes Folder')
+      .setDesc('Folder where new notes are created (empty = vault root)')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. Daily Notes')
+          .setPlaceholder('e.g. Daily Notes')
           .setValue(this.plugin.settings.dailyNoteFolder)
           .onChange(async (value) => {
             this.plugin.settings.dailyNoteFolder = value;
@@ -215,11 +215,11 @@ phase-label: Grundschule<br>
       });
 
     new Setting(containerEl)
-      .setName('Filter-Ordner')
-      .setDesc('Nur Notizen aus diesem Ordner anzeigen (leer = alle)')
+      .setName('Filter Folder')
+      .setDesc('Only show notes from this folder (empty = all)')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. Journal')
+          .setPlaceholder('e.g. Journal')
           .setValue(this.plugin.settings.calendarFilterFolder)
           .onChange(async (value) => {
             this.plugin.settings.calendarFilterFolder = value;
@@ -229,8 +229,8 @@ phase-label: Grundschule<br>
       });
 
     new Setting(containerEl)
-      .setName('Dateiname-Format')
-      .setDesc('Format für neue Notizen (YYYY-MM-DD)')
+      .setName('Filename Format')
+      .setDesc('Format for new notes (YYYY-MM-DD)')
       .addText((text) => {
         text
           .setPlaceholder('YYYY-MM-DD')
@@ -245,11 +245,11 @@ phase-label: Grundschule<br>
       });
 
     new Setting(containerEl)
-      .setName('Jährlich wiederkehrend')
-      .setDesc('Ordner für Geburtstage, Jahrestage (z.B. 27.03.1977 wird jedes Jahr am 27.03. angezeigt)')
+      .setName('Annual Recurring')
+      .setDesc('Folder for birthdays, anniversaries (use XXXX-MM-DD format, shown every year on that date)')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. Geburtstage')
+          .setPlaceholder('e.g. Birthdays')
           .setValue(this.plugin.settings.annualRecurringFolder)
           .onChange(async (value) => {
             this.plugin.settings.annualRecurringFolder = value;
@@ -263,7 +263,7 @@ phase-label: Grundschule<br>
    * Creates the ring configuration section
    */
   private createRingConfigSection(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Ringe konfigurieren' });
+    containerEl.createEl('h3', { text: 'Configure Rings' });
 
     // Render existing rings
     const rings = this.plugin.settings.rings;
@@ -275,7 +275,7 @@ phase-label: Grundschule<br>
     new Setting(containerEl)
       .addButton((button) => {
         button
-          .setButtonText('Ring hinzufugen')
+          .setButtonText('Add Ring')
           .setCta()
           .onClick(async () => {
             const newRing = createDefaultRing(rings.length);
@@ -315,11 +315,11 @@ phase-label: Grundschule<br>
 
     // Folder input with autocomplete
     new Setting(ringContainer)
-      .setName('Ordner')
-      .setDesc('Ordnerpfad im Vault')
+      .setName('Folder')
+      .setDesc('Folder path in vault')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. Projects/2024')
+          .setPlaceholder('e.g. Projects/2024')
           .setValue(ring.folder)
           .onChange(async (value) => {
             this.updateRing(index, { folder: value });
@@ -330,7 +330,7 @@ phase-label: Grundschule<br>
 
     // Color dropdown
     new Setting(ringContainer)
-      .setName('Farbe')
+      .setName('Color')
       .addDropdown((dropdown) => {
         // Add all color options from RING_COLORS
         Object.keys(RING_COLORS).forEach((colorName) => {
@@ -346,7 +346,7 @@ phase-label: Grundschule<br>
     // Spanning Arcs toggle
     new Setting(ringContainer)
       .setName('Spanning Arcs')
-      .setDesc('Multi-Day Events als durchgehende Bögen anzeigen')
+      .setDesc('Show multi-day events as continuous arcs')
       .addToggle((toggle) => {
         toggle
           .setValue(ring.showSpanningArcs ?? false)
@@ -365,7 +365,7 @@ phase-label: Grundschule<br>
     new Setting(ringContainer)
       .addButton((button) => {
         button
-          .setButtonText('Loschen')
+          .setButtonText('Delete')
           .setWarning()
           .onClick(async () => {
             this.plugin.settings.rings = this.plugin.settings.rings.filter(
@@ -407,8 +407,8 @@ phase-label: Grundschule<br>
 
     // Start Date Property
     new Setting(propsContainer)
-      .setName('Start-Datum Property')
-      .setDesc('YAML-Frontmatter Feld für Startdatum')
+      .setName('Start Date Property')
+      .setDesc('YAML frontmatter field for start date')
       .addText((text) => {
         text
           .setPlaceholder('radcal-start')
@@ -420,8 +420,8 @@ phase-label: Grundschule<br>
 
     // End Date Property
     new Setting(propsContainer)
-      .setName('End-Datum Property')
-      .setDesc('YAML-Frontmatter Feld für Enddatum')
+      .setName('End Date Property')
+      .setDesc('YAML frontmatter field for end date')
       .addText((text) => {
         text
           .setPlaceholder('radcal-end')
@@ -433,8 +433,8 @@ phase-label: Grundschule<br>
 
     // Color Property
     new Setting(propsContainer)
-      .setName('Farbe Property')
-      .setDesc('YAML-Frontmatter Feld für Farbe')
+      .setName('Color Property')
+      .setDesc('YAML frontmatter field for color')
       .addText((text) => {
         text
           .setPlaceholder('radcal-color')
@@ -447,7 +447,7 @@ phase-label: Grundschule<br>
     // Label Property
     new Setting(propsContainer)
       .setName('Label Property')
-      .setDesc('YAML-Frontmatter Feld für Beschriftung')
+      .setDesc('YAML frontmatter field for label')
       .addText((text) => {
         text
           .setPlaceholder('radcal-label')
@@ -470,21 +470,21 @@ phase-label: Grundschule<br>
    * Creates the outer segments section
    */
   private createOuterSegmentsSection(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Äußere Segmente' });
+    containerEl.createEl('h3', { text: 'Outer Segments' });
 
     // Segment type dropdown
     new Setting(containerEl)
-      .setName('Segment-Typ')
-      .setDesc('Markierungen am äußeren Rand des Kalenders')
+      .setName('Segment Type')
+      .setDesc('Markers on the outer edge of the calendar')
       .addDropdown((dropdown) => {
         dropdown
-          .addOption('none', 'Keine')
-          .addOption('seasons', 'Jahreszeiten (4)')
-          .addOption('quarters', 'Quartale (4)')
-          .addOption('semester', 'Semester (2)')
-          .addOption('ten-days', '10-Tages-Phasen (36)')
-          .addOption('weeks', 'Wochen (52)')
-          .addOption('custom', 'Benutzerdefiniert')
+          .addOption('none', 'None')
+          .addOption('seasons', 'Seasons (4)')
+          .addOption('quarters', 'Quarters (4)')
+          .addOption('semester', 'Semesters (2)')
+          .addOption('ten-days', '10-Day Phases (36)')
+          .addOption('weeks', 'Weeks (52)')
+          .addOption('custom', 'Custom')
           .setValue(this.plugin.settings.annualSegmentType)
           .onChange(async (value) => {
             this.plugin.settings.annualSegmentType = value as AnnualSegmentType;
@@ -495,8 +495,8 @@ phase-label: Grundschule<br>
 
     // Show labels toggle
     new Setting(containerEl)
-      .setName('Labels anzeigen')
-      .setDesc('Segment-Beschriftungen anzeigen')
+      .setName('Show Labels')
+      .setDesc('Display segment labels')
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.showSegmentLabels)
@@ -521,7 +521,7 @@ phase-label: Grundschule<br>
    * Creates the custom segments editor
    */
   private createCustomSegmentsEditor(containerEl: HTMLElement): void {
-    containerEl.createEl('h4', { text: 'Benutzerdefinierte Segmente' });
+    containerEl.createEl('h4', { text: 'Custom Segments' });
 
     const segments = this.plugin.settings.customSegments;
 
@@ -533,7 +533,7 @@ phase-label: Grundschule<br>
     new Setting(containerEl)
       .addButton((button) => {
         button
-          .setButtonText('Segment hinzufügen')
+          .setButtonText('Add Segment')
           .onClick(async () => {
             const newSegment: OuterSegmentConfig = {
               id: `seg-${Date.now()}`,
@@ -569,8 +569,8 @@ phase-label: Grundschule<br>
       });
 
     new Setting(segmentContainer)
-      .setName('Start-Tag')
-      .setDesc('Tag des Jahres (1-365)')
+      .setName('Start Day')
+      .setDesc('Day of year (1-365)')
       .addText((text) => {
         text
           .setValue(String(segment.startDay))
@@ -583,8 +583,8 @@ phase-label: Grundschule<br>
       });
 
     new Setting(segmentContainer)
-      .setName('End-Tag')
-      .setDesc('Tag des Jahres (1-365)')
+      .setName('End Day')
+      .setDesc('Day of year (1-365)')
       .addText((text) => {
         text
           .setValue(String(segment.endDay))
@@ -599,7 +599,7 @@ phase-label: Grundschule<br>
     new Setting(segmentContainer)
       .addButton((button) => {
         button
-          .setButtonText('Löschen')
+          .setButtonText('Delete')
           .setWarning()
           .onClick(async () => {
             this.plugin.settings.customSegments = this.plugin.settings.customSegments.filter(
@@ -627,7 +627,7 @@ phase-label: Grundschule<br>
    * Creates the life acts editor
    */
   private createLifeActsEditor(containerEl: HTMLElement): void {
-    containerEl.createEl('h4', { text: 'Lebensakte' });
+    containerEl.createEl('h4', { text: 'Life Acts' });
 
     const lifeActs = this.plugin.settings.lifeActs;
 
@@ -639,11 +639,11 @@ phase-label: Grundschule<br>
     new Setting(containerEl)
       .addButton((button) => {
         button
-          .setButtonText('Lebensakt hinzufügen')
+          .setButtonText('Add Life Act')
           .onClick(async () => {
             const newAct: LifeActConfig = {
               id: `act-${Date.now()}`,
-              label: `Akt ${lifeActs.length + 1}`,
+              label: `Act ${lifeActs.length + 1}`,
               startAge: 0,
               endAge: 10,
             };
@@ -665,10 +665,10 @@ phase-label: Grundschule<br>
     const actContainer = containerEl.createDiv({ cls: 'radial-calendar-life-act-config' });
 
     new Setting(actContainer)
-      .setName('Bezeichnung')
+      .setName('Label')
       .addText((text) => {
         text
-          .setPlaceholder('z.B. Kindheit')
+          .setPlaceholder('e.g. Childhood')
           .setValue(act.label)
           .onChange(async (value) => {
             this.updateLifeAct(index, { label: value });
@@ -676,7 +676,7 @@ phase-label: Grundschule<br>
       });
 
     new Setting(actContainer)
-      .setName('Start-Alter')
+      .setName('Start Age')
       .addText((text) => {
         text
           .setValue(String(act.startAge))
@@ -689,7 +689,7 @@ phase-label: Grundschule<br>
       });
 
     new Setting(actContainer)
-      .setName('End-Alter')
+      .setName('End Age')
       .addText((text) => {
         text
           .setValue(String(act.endAge))
@@ -703,9 +703,9 @@ phase-label: Grundschule<br>
 
     // Color dropdown (optional)
     new Setting(actContainer)
-      .setName('Farbe')
+      .setName('Color')
       .addDropdown((dropdown) => {
-        dropdown.addOption('', '(Standard)');
+        dropdown.addOption('', '(Default)');
         Object.keys(RING_COLORS).forEach((colorName) => {
           dropdown.addOption(colorName, this.formatColorName(colorName));
         });
@@ -719,7 +719,7 @@ phase-label: Grundschule<br>
     new Setting(actContainer)
       .addButton((button) => {
         button
-          .setButtonText('Löschen')
+          .setButtonText('Delete')
           .setWarning()
           .onClick(async () => {
             this.plugin.settings.lifeActs = this.plugin.settings.lifeActs.filter(
@@ -750,11 +750,11 @@ phase-label: Grundschule<br>
     containerEl.createEl('h3', { text: 'Template' });
 
     new Setting(containerEl)
-      .setName('Template erstellen')
-      .setDesc('Erstellt eine Template-Datei fur Ring-Segmente im Vault')
+      .setName('Create Template')
+      .setDesc('Creates a template file for ring segments in your vault')
       .addButton((button) => {
         button
-          .setButtonText('Template erstellen')
+          .setButtonText('Create Template')
           .onClick(async () => {
             await this.createTemplateFile();
           });
@@ -778,16 +778,16 @@ phase-label: Grundschule<br>
       // Check if template already exists
       const existingFile = this.app.vault.getAbstractFileByPath(templatePath);
       if (existingFile) {
-        new Notice(`Template existiert bereits: ${templatePath}`);
+        new Notice(`Template already exists: ${templatePath}`);
         return;
       }
 
       // Create template file
       await this.app.vault.create(templatePath, RING_SEGMENT_TEMPLATE);
-      new Notice(`Template erstellt: ${templatePath}`);
+      new Notice(`Template created: ${templatePath}`);
     } catch (error) {
       console.error('Failed to create template file:', error);
-      new Notice('Fehler beim Erstellen des Templates');
+      new Notice('Error creating template');
     }
   }
 
@@ -795,15 +795,15 @@ phase-label: Grundschule<br>
    * Creates the center display section
    */
   private createCenterDisplaySection(containerEl: HTMLElement): void {
-    containerEl.createEl('h3', { text: 'Zentrum Anzeige' });
+    containerEl.createEl('h3', { text: 'Center Display' });
 
     new Setting(containerEl)
-      .setName('Anzeigemodus')
-      .setDesc('Was im Zentrum des Kalenders angezeigt wird')
+      .setName('Display Mode')
+      .setDesc('What is shown in the center of the calendar')
       .addDropdown((dropdown) => {
         dropdown
           .addOption('countdown', 'Countdown')
-          .addOption('stats', 'Statistiken')
+          .addOption('stats', 'Statistics')
           .addOption('navigation', 'Navigation')
           .setValue(this.plugin.settings.centerDisplay)
           .onChange(async (value) => {

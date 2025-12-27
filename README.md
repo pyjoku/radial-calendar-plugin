@@ -42,7 +42,7 @@ This plugin is currently in beta. Use the [BRAT plugin](https://github.com/TfTHa
 
 ## Views
 
-### Annual View (Jahresansicht)
+### Annual View
 
 The default view showing a single year as a radial calendar:
 
@@ -58,7 +58,7 @@ The default view showing a single year as a radial calendar:
 - Click any day to open/create a daily note
 - Right-click for context menu with note options
 
-### Life View (Lebensansicht)
+### Life View
 
 A nested clock visualization of your entire life:
 

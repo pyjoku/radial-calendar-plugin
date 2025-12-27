@@ -904,10 +904,10 @@ export function getMaxTrackCount(phases: PhaseWithTrack[]): number {
  * Seasons (meteorological, Northern Hemisphere)
  */
 export const PREDEFINED_SEASONS: OuterSegmentConfig[] = [
-  { id: 'spring', label: 'Frühling', startDay: 60, endDay: 152 },   // 1 Mar - 31 May
-  { id: 'summer', label: 'Sommer', startDay: 152, endDay: 244 },    // 1 Jun - 31 Aug
-  { id: 'autumn', label: 'Herbst', startDay: 244, endDay: 335 },    // 1 Sep - 30 Nov
-  { id: 'winter', label: 'Winter', startDay: 335, endDay: 60 },     // 1 Dec - 28 Feb (wraps)
+  { id: 'spring', label: 'Spring', startDay: 60, endDay: 152 },   // 1 Mar - 31 May
+  { id: 'summer', label: 'Summer', startDay: 152, endDay: 244 },  // 1 Jun - 31 Aug
+  { id: 'autumn', label: 'Autumn', startDay: 244, endDay: 335 },  // 1 Sep - 30 Nov
+  { id: 'winter', label: 'Winter', startDay: 335, endDay: 60 },   // 1 Dec - 28 Feb (wraps)
 ];
 
 /**

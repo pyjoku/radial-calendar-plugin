@@ -13,7 +13,7 @@ import { RING_COLORS } from '../../core/domain/types';
 import { getToday, createLocalDate, getDaysInMonth, getWeekday } from '../../core/domain/models/LocalDate';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
 
-const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export const VIEW_TYPE_LOCAL_CALENDAR = 'local-calendar-view';
 

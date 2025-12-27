@@ -110,11 +110,9 @@ export class DateEngine {
     // Trim whitespace
     const trimmed = dateStr.trim();
 
-    // Check for anniversary format first (XXXX-MM-DD, 4XX-MM-DD, XXX-MM-DD, etc.)
-    // Accepts any combination of X's and digits in the year position
-    const anniversaryMatch = trimmed.match(/^[X\d]{3,4}-(\d{2})-(\d{2})$/i);
-    if (anniversaryMatch && trimmed.match(/X/i)) {
-      // This is an anniversary date with placeholder year
+    // Check for anniversary format: XXXX-MM-DD (recurring yearly events)
+    const anniversaryMatch = trimmed.match(/^XXXX-(\d{2})-(\d{2})$/i);
+    if (anniversaryMatch) {
       const month = parseInt(anniversaryMatch[1], 10);
       const day = parseInt(anniversaryMatch[2], 10);
 
