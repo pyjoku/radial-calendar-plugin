@@ -309,6 +309,13 @@ export interface LinearCalendarSettings {
 
   /** Highlight weekend days */
   showWeekendHighlight: boolean;
+
+  /**
+   * Additional frontmatter properties to use for anniversary dates.
+   * These are checked in addition to radcal-start/radcal-end.
+   * Example: ["Birthday", "Todestag", "Hochzeitstag"]
+   */
+  anniversaryDateProperties: string[];
 }
 
 /**
@@ -323,6 +330,7 @@ export const DEFAULT_SETTINGS: LinearCalendarSettings = {
   dailyNoteFormat: 'YYYY-MM-DD',
   showMultiDayBars: true,
   showWeekendHighlight: true,
+  anniversaryDateProperties: [],
 };
 
 // ============================================================================
@@ -703,6 +711,15 @@ export interface RadialCalendarSettings {
 
   /** Whether to show segment labels */
   showSegmentLabels: boolean;
+
+  // ======== Anniversary Settings ========
+
+  /**
+   * Additional frontmatter properties to use for anniversary dates.
+   * These are checked in addition to radcal-start/radcal-end.
+   * Example: ["Birthday", "Todestag", "Hochzeitstag"]
+   */
+  anniversaryDateProperties: string[];
 }
 
 /**
@@ -996,6 +1013,8 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
   customSegments: [],
   lifeActs: [],
   showSegmentLabels: true,
+  // Anniversary
+  anniversaryDateProperties: [],
 };
 
 /**

@@ -257,6 +257,47 @@ phase-label: Elementary School<br>
           });
         new FolderSuggest(this.app, text.inputEl);
       });
+
+    // Anniversary Date Properties
+    containerEl.createEl('h4', { text: 'Anniversary Properties' });
+
+    new Setting(containerEl)
+      .setName('Additional Date Properties')
+      .setDesc('Comma-separated list of YAML properties to use for anniversary dates (in addition to radcal-start/radcal-end)')
+      .addText((text) => {
+        text
+          .setPlaceholder('e.g. Birthday, Todestag, Hochzeitstag')
+          .setValue(this.plugin.settings.anniversaryDateProperties?.join(', ') || '')
+          .onChange(async (value) => {
+            // Parse comma-separated list and trim whitespace
+            const props = value
+              .split(',')
+              .map(p => p.trim())
+              .filter(p => p.length > 0);
+            this.plugin.settings.anniversaryDateProperties = props;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Help text for anniversaries
+    const anniversaryHelpDiv = containerEl.createDiv({ cls: 'setting-item-description' });
+    anniversaryHelpDiv.innerHTML = `
+      <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+        <strong>Anniversary Properties:</strong><br>
+        Use <code>radcal-annual: true</code> to mark a note as anniversary.<br><br>
+        <strong>Date sources (checked in order):</strong><br>
+        1. <code>radcal-annual-fix</code> - Single fixed date (overrides all)<br>
+        2. <code>radcal-start</code> / <code>radcal-end</code> - Birth + death dates<br>
+        3. Properties from list above (e.g., <code>Birthday</code>)<br><br>
+        <strong>Example:</strong>
+        <code style="display: block; padding: 8px; background: var(--background-secondary); border-radius: 4px; margin-top: 4px;">
+---<br>
+radcal-annual: true<br>
+Birthday: 1982-09-24<br>
+---
+        </code>
+      </p>
+    `;
   }
 
   /**

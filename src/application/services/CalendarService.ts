@@ -623,10 +623,8 @@ export class CalendarService {
     const config = this.getDateExtractionConfig();
 
     for (const fileInfo of files) {
-      const entry = this.createEntryFromFile(fileInfo, config);
-      if (entry) {
-        entries.push(entry);
-      }
+      const fileEntries = this.createEntriesFromFile(fileInfo, config);
+      entries.push(...fileEntries);
     }
 
     this.entryCache.rebuild(entries);
@@ -634,12 +632,14 @@ export class CalendarService {
   }
 
   /**
-   * Creates a calendar entry from a file
+   * Creates calendar entries from a file.
+   * Returns an array because anniversary entries with both start and end dates
+   * create two separate entries (e.g., birthday + death day).
    */
-  private createEntryFromFile(
+  private createEntriesFromFile(
     fileInfo: FileInfo,
     config: DateExtractionConfig
-  ): CalendarEntry | null {
+  ): CalendarEntry[] {
     const metadata = this.metadataRepository.getMetadataByPath(fileInfo.path);
     const frontmatter = metadata?.frontmatter ?? null;
 
@@ -649,9 +649,8 @@ export class CalendarService {
       config
     );
 
-    if (!start) {
-      return null;
-    }
+    // Check for radcal-annual (anniversary entries)
+    const isAnniversary = frontmatter?.['radcal-annual'] === true;
 
     // Convert frontmatter to the expected properties format
     const properties: Record<string, string | number | boolean> = {};
@@ -663,23 +662,126 @@ export class CalendarService {
       }
     }
 
-    // Check for radcal-annual property (boolean) to mark as anniversary
-    const isAnniversary = frontmatter?.['radcal-annual'] === true;
+    const baseMetadata = {
+      tags: metadata?.tags.map((t) => t.name) ?? [],
+      folder: fileInfo.folderPath ?? '',
+      properties,
+    };
 
-    return createCalendarEntry({
+    // Handle anniversary entries specially
+    if (isAnniversary && frontmatter) {
+      const entries: CalendarEntry[] = [];
+
+      // Check for radcal-annual-fix (overrides everything else)
+      const radcalFix = this.parseFrontmatterDate(frontmatter['radcal-annual-fix']);
+
+      if (radcalFix) {
+        // Only use the fix date, ignore start/end
+        entries.push(createCalendarEntry({
+          id: `${fileInfo.path}#fix`,
+          filePath: fileInfo.path,
+          fileName: fileInfo.name,
+          displayName: fileInfo.basename,
+          startDate: radcalFix,
+          endDate: undefined,
+          metadata: baseMetadata,
+          isAnniversary: true,
+        }));
+        return entries;
+      }
+
+      // Parse radcal-start
+      const radcalStart = this.parseFrontmatterDate(frontmatter['radcal-start']);
+      // Parse radcal-end
+      const radcalEnd = this.parseFrontmatterDate(frontmatter['radcal-end']);
+
+      // Create entry for start date (e.g., birthday)
+      if (radcalStart) {
+        entries.push(createCalendarEntry({
+          id: `${fileInfo.path}#start`,
+          filePath: fileInfo.path,
+          fileName: fileInfo.name,
+          displayName: fileInfo.basename,
+          startDate: radcalStart,
+          endDate: undefined,
+          metadata: baseMetadata,
+          isAnniversary: true,
+        }));
+      }
+
+      // Create entry for end date (e.g., death day)
+      if (radcalEnd) {
+        entries.push(createCalendarEntry({
+          id: `${fileInfo.path}#end`,
+          filePath: fileInfo.path,
+          fileName: fileInfo.name,
+          displayName: fileInfo.basename,
+          startDate: radcalEnd,
+          endDate: undefined,
+          metadata: baseMetadata,
+          isAnniversary: true,
+        }));
+      }
+
+      // Check additional anniversary properties from settings
+      const additionalProps = this.settings.anniversaryDateProperties || [];
+      for (const propName of additionalProps) {
+        const propDate = this.parseFrontmatterDate(frontmatter[propName]);
+        if (propDate) {
+          // Use property name as suffix for unique ID
+          const propId = propName.toLowerCase().replace(/\s+/g, '-');
+          entries.push(createCalendarEntry({
+            id: `${fileInfo.path}#${propId}`,
+            filePath: fileInfo.path,
+            fileName: fileInfo.name,
+            displayName: fileInfo.basename,
+            startDate: propDate,
+            endDate: undefined,
+            metadata: baseMetadata,
+            isAnniversary: true,
+          }));
+        }
+      }
+
+      return entries;
+    }
+
+    // Normal (non-anniversary) entry
+    if (!start) {
+      return [];
+    }
+
+    return [createCalendarEntry({
       id: fileInfo.path,
       filePath: fileInfo.path,
       fileName: fileInfo.name,
       displayName: fileInfo.basename,
       startDate: start,
       endDate: end,
-      metadata: {
-        tags: metadata?.tags.map((t) => t.name) ?? [],
-        folder: fileInfo.folderPath ?? '',
-        properties,
-      },
-      isAnniversary: isAnniversary || undefined,  // Only pass if true
-    });
+      metadata: baseMetadata,
+      isAnniversary: undefined,
+    })];
+  }
+
+  /**
+   * Parses a frontmatter date value (string or Date object)
+   */
+  private parseFrontmatterDate(value: unknown): LocalDate | null {
+    if (!value) return null;
+
+    if (typeof value === 'string') {
+      return this.parseYAMLDate(value);
+    }
+
+    if (value instanceof Date) {
+      return createLocalDate(
+        value.getFullYear(),
+        value.getMonth() + 1,
+        value.getDate()
+      );
+    }
+
+    return null;
   }
 
   /**
@@ -726,17 +828,24 @@ export class CalendarService {
     );
 
     if (!fileInfo) {
-      // File was deleted
+      // File was deleted - remove all entries for this file
       this.entryCache.removeEntry(filePath);
+      this.entryCache.removeEntry(`${filePath}#start`);
+      this.entryCache.removeEntry(`${filePath}#end`);
+      this.entryCache.removeEntry(`${filePath}#fix`);
     } else {
-      // File was added or modified
-      const config = this.getDateExtractionConfig();
-      const entry = this.createEntryFromFile(fileInfo, config);
+      // File was added or modified - remove old entries first
+      this.entryCache.removeEntry(filePath);
+      this.entryCache.removeEntry(`${filePath}#start`);
+      this.entryCache.removeEntry(`${filePath}#end`);
+      this.entryCache.removeEntry(`${filePath}#fix`);
 
-      if (entry) {
+      // Add new entries
+      const config = this.getDateExtractionConfig();
+      const entries = this.createEntriesFromFile(fileInfo, config);
+
+      for (const entry of entries) {
         this.entryCache.addEntry(entry);
-      } else {
-        this.entryCache.removeEntry(filePath);
       }
     }
 

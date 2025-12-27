@@ -1115,18 +1115,11 @@ export class RadialCalendarView extends ItemView {
   private showAnniversaryTooltip(event: MouseEvent, entries: readonly CalendarEntry[]): void {
     if (!this.tooltipEl || entries.length === 0) return;
 
-    // Get the recurring date from the first entry
-    const firstEntry = entries[0];
-    const recurringDate = `${firstEntry.startDate.day}.${firstEntry.startDate.month}.`;
-
-    let content = `<div class="rc-tooltip-date">📅 ${recurringDate} (annual)</div>`;
+    let content = '<div class="rc-tooltip-date">📅</div>';
     content += '<div class="rc-tooltip-notes">';
 
     for (const entry of entries.slice(0, 5)) {
-      // Show full date including year (the actual note date)
-      const fullDate = `${entry.startDate.day}.${entry.startDate.month}.${entry.startDate.year}`;
       content += `<div class="rc-tooltip-note">${entry.displayName}</div>`;
-      content += `<div class="rc-tooltip-more" style="margin-bottom:4px;">${fullDate}</div>`;
     }
 
     if (entries.length > 5) {
