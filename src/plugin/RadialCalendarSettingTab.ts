@@ -335,6 +335,7 @@ Birthday: 1982-09-24<br>
               syncOnStart: true,
               syncIntervalMinutes: 0,
               enabled: true,
+              showAsRing: true,
             };
             if (!this.plugin.settings.calendarSources) {
               this.plugin.settings.calendarSources = [];
@@ -487,6 +488,19 @@ Birthday: 1982-09-24<br>
           .setValue(source.enabled)
           .onChange(async (value) => {
             source.enabled = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Show as Ring toggle
+    new Setting(sourceContainer)
+      .setName('Show as Ring')
+      .setDesc('Display this calendar as a ring in the annual view')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(source.showAsRing ?? true)
+          .onChange(async (value) => {
+            source.showAsRing = value;
             await this.plugin.saveSettings();
           });
       });

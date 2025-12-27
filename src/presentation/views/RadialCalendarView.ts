@@ -656,13 +656,8 @@ export class RadialCalendarView extends ItemView {
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
 
-    const rect = this.containerEl_?.getBoundingClientRect();
-    if (rect) {
-      const x = event.clientX - rect.left + 10;
-      const y = event.clientY - rect.top + 10;
-      this.tooltipEl.style.left = `${x}px`;
-      this.tooltipEl.style.top = `${y}px`;
-    }
+    // Center tooltip in the container
+    this.centerTooltip();
   }
 
   /**
@@ -980,13 +975,8 @@ export class RadialCalendarView extends ItemView {
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
 
-    const rect = this.containerEl_?.getBoundingClientRect();
-    if (rect) {
-      const x = event.clientX - rect.left + 10;
-      const y = event.clientY - rect.top + 10;
-      this.tooltipEl.style.left = `${x}px`;
-      this.tooltipEl.style.top = `${y}px`;
-    }
+    // Center tooltip in the container
+    this.centerTooltip();
   }
 
   /**
@@ -1130,19 +1120,15 @@ export class RadialCalendarView extends ItemView {
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
 
-    const rect = this.containerEl_?.getBoundingClientRect();
-    if (rect) {
-      const x = event.clientX - rect.left + 10;
-      const y = event.clientY - rect.top + 10;
-      this.tooltipEl.style.left = `${x}px`;
-      this.tooltipEl.style.top = `${y}px`;
-    }
+    // Center tooltip in the container
+    this.centerTooltip();
   }
 
   /**
    * Gets enabled rings sorted by order (0 = outermost, higher = inner)
    * Always includes Daily Notes ring as order 0 if dailyNoteFolder is configured
    * Falls back to showing all entries if no folder is configured
+   * Also includes calendar sources with showAsRing enabled
    */
   private getEnabledRingsSorted(): RingConfig[] {
     if (!this.config) return [];
@@ -1172,6 +1158,22 @@ export class RadialCalendarView extends ItemView {
       }));
 
     rings.push(...configuredRings);
+
+    // Add calendar sources with showAsRing enabled as virtual rings
+    const calendarSources = this.config.settings.calendarSources || [];
+    const calendarRings = calendarSources
+      .filter(source => source.enabled && source.showAsRing && source.folder)
+      .map((source, index) => ({
+        id: `__calendar_${source.id}__`,
+        name: source.name,
+        folder: source.folder,
+        color: source.color,
+        segmentType: 'daily' as const,
+        enabled: true,
+        order: rings.length + index,
+      }));
+
+    rings.push(...calendarRings);
 
     return rings;
   }
@@ -1370,13 +1372,8 @@ export class RadialCalendarView extends ItemView {
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
 
-    const rect = this.containerEl_?.getBoundingClientRect();
-    if (rect) {
-      const x = event.clientX - rect.left + 10;
-      const y = event.clientY - rect.top + 10;
-      this.tooltipEl.style.left = `${x}px`;
-      this.tooltipEl.style.top = `${y}px`;
-    }
+    // Center tooltip in the container
+    this.centerTooltip();
   }
 
   /**
@@ -1649,14 +1646,8 @@ export class RadialCalendarView extends ItemView {
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
 
-    // Position tooltip near mouse
-    const rect = this.containerEl_?.getBoundingClientRect();
-    if (rect) {
-      const x = event.clientX - rect.left + 10;
-      const y = event.clientY - rect.top + 10;
-      this.tooltipEl.style.left = `${x}px`;
-      this.tooltipEl.style.top = `${y}px`;
-    }
+    // Center tooltip in the container
+    this.centerTooltip();
   }
 
   private renderBackgroundCircle(svg: SVGSVGElement): void {
@@ -1912,20 +1903,28 @@ export class RadialCalendarView extends ItemView {
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
 
-    // Position tooltip near mouse
-    const rect = this.containerEl_?.getBoundingClientRect();
-    if (rect) {
-      const x = event.clientX - rect.left + 10;
-      const y = event.clientY - rect.top + 10;
-      this.tooltipEl.style.left = `${x}px`;
-      this.tooltipEl.style.top = `${y}px`;
-    }
+    // Center tooltip in the container
+    this.centerTooltip();
   }
 
   private hideTooltip(): void {
     if (this.tooltipEl) {
       this.tooltipEl.style.display = 'none';
     }
+  }
+
+  /**
+   * Centers the tooltip in the container
+   */
+  private centerTooltip(): void {
+    if (!this.tooltipEl || !this.containerEl_) return;
+
+    const containerRect = this.containerEl_.getBoundingClientRect();
+
+    // Position at center of container
+    this.tooltipEl.style.left = '50%';
+    this.tooltipEl.style.top = '50%';
+    this.tooltipEl.style.transform = 'translate(-50%, -50%)';
   }
 
   private showDayContextMenu(event: MouseEvent, date: LocalDate, entries: readonly CalendarEntry[]): void {

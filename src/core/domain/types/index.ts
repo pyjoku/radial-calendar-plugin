@@ -757,6 +757,9 @@ export interface CalendarSourceConfig {
   /** Whether this source is enabled */
   enabled: boolean;
 
+  /** Show as ring in annual view */
+  showAsRing: boolean;
+
   /** Last sync timestamp */
   lastSync?: number;
 }

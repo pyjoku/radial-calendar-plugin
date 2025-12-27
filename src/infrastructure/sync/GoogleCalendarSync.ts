@@ -302,6 +302,7 @@ export function createDefaultCalendarSource(): CalendarSourceConfig {
     syncOnStart: true,
     syncIntervalMinutes: 0,
     enabled: true,
+    showAsRing: true,
   };
 }
 
