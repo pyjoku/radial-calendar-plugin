@@ -8,26 +8,27 @@
 import { Plugin, WorkspaceLeaf, TFile } from 'obsidian';
 import { CalendarService } from '../application/services/CalendarService';
 import { RadialCalendarView, VIEW_TYPE_RADIAL_CALENDAR } from '../presentation/views/RadialCalendarView';
-import type { LinearCalendarSettings } from '../core/domain/types';
-
-const DEFAULT_SETTINGS: LinearCalendarSettings = {
-  dateProperties: ['date', 'created', 'due'],
-  endDateProperties: ['endDate', 'end', 'until'],
-  datePriority: 'filename',
-  dailyNoteFormat: 'YYYY-MM-DD',
-  dailyNoteFolder: '',
-};
+import { RadialCalendarSettingTab } from './RadialCalendarSettingTab';
+import type { RadialCalendarSettings, LinearCalendarSettings } from '../core/domain/types';
+import { DEFAULT_RADIAL_SETTINGS } from '../core/domain/types';
 
 export class RadialCalendarPlugin extends Plugin {
   private service: CalendarService | null = null;
-  private settings: LinearCalendarSettings = DEFAULT_SETTINGS;
+  settings: RadialCalendarSettings = { ...DEFAULT_RADIAL_SETTINGS };
 
   async onload(): Promise<void> {
     // Load settings
     await this.loadSettings();
 
-    // Initialize service
-    this.service = new CalendarService(this.app, this.settings);
+    // Initialize service with legacy settings for now
+    const legacySettings: LinearCalendarSettings = {
+      dateProperties: ['date', 'created', 'due'],
+      endDateProperties: ['endDate', 'end', 'until'],
+      datePriority: 'filename',
+      dailyNoteFormat: this.settings.periodicNotesFormat.daily,
+      dailyNoteFolder: '',
+    };
+    this.service = new CalendarService(this.app, legacySettings);
     await this.service.initialize();
 
     // Register view
@@ -44,6 +45,9 @@ export class RadialCalendarPlugin extends Plugin {
       });
       return view;
     });
+
+    // Add settings tab
+    this.addSettingTab(new RadialCalendarSettingTab(this.app, this));
 
     // Add ribbon icon
     this.addRibbonIcon('circle', 'Open Radial Calendar', () => {
@@ -65,9 +69,13 @@ export class RadialCalendarPlugin extends Plugin {
     this.service = null;
   }
 
-  private async loadSettings(): Promise<void> {
+  async loadSettings(): Promise<void> {
     const data = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+    this.settings = Object.assign({}, DEFAULT_RADIAL_SETTINGS, data);
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
   }
 
   private async activateView(): Promise<void> {

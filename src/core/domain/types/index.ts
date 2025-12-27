@@ -376,3 +376,234 @@ export function createViewState(year: number, month: number): ViewState {
     focusedEntryId: null
   });
 }
+
+// ============================================================================
+// Radial Calendar Types
+// ============================================================================
+
+/**
+ * Available color names for ring styling
+ */
+export type RingColorName =
+  | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink'
+  | 'teal' | 'cyan' | 'magenta' | 'lime' | 'amber' | 'indigo' | 'violet' | 'rose'
+  | 'gray' | 'slate' | 'stone';
+
+/**
+ * Ring style options
+ */
+export type RingStyle = 'solid' | 'striped' | 'dotted' | 'gradient';
+
+/**
+ * Segment type for ring entries
+ */
+export type SegmentType = 'monthly' | 'weekly' | 'daily' | 'custom';
+
+/**
+ * View mode for the radial calendar
+ */
+export type RadialViewMode = 'annual' | 'life';
+
+/**
+ * Center display mode
+ */
+export type CenterDisplayMode = 'countdown' | 'stats' | 'navigation';
+
+/**
+ * Configuration for a single ring
+ */
+export interface RingConfig {
+  /** Unique identifier */
+  readonly id: string;
+
+  /** Display name */
+  readonly name: string;
+
+  /** Folder path in vault */
+  readonly folder: string;
+
+  /** Primary color (color name) */
+  readonly color: RingColorName;
+
+  /** Segment type */
+  readonly segmentType: SegmentType;
+
+  /** Whether ring is enabled */
+  readonly enabled: boolean;
+
+  /** Position order (0 = outermost) */
+  readonly order: number;
+}
+
+/**
+ * Periodic notes format configuration
+ */
+export interface PeriodicNotesFormat {
+  /** Yearly note format, e.g., "YYYY" */
+  readonly yearly: string;
+
+  /** Monthly note format, e.g., "YYYY-MM" */
+  readonly monthly: string;
+
+  /** Daily note format, e.g., "YYYY-MM-DD" */
+  readonly daily: string;
+}
+
+/**
+ * Complete Radial Calendar settings
+ */
+export interface RadialCalendarSettings {
+  /** Current view mode */
+  currentView: RadialViewMode;
+
+  /** Birth year for life view */
+  birthYear: number;
+
+  /** Expected lifespan for life view */
+  expectedLifespan: number;
+
+  /** Current year for annual view */
+  currentYear: number;
+
+  /** Ring configurations (ordered from outside to inside) */
+  rings: RingConfig[];
+
+  /** Center display mode */
+  centerDisplay: CenterDisplayMode;
+
+  /** Periodic notes format */
+  periodicNotesFormat: PeriodicNotesFormat;
+
+  /** Template folder for generated templates */
+  templateFolder: string;
+}
+
+/**
+ * Frontmatter properties for ring segment styling
+ */
+export interface RingSegmentFrontmatter {
+  /** Override ring color */
+  'ring-color'?: RingColorName;
+
+  /** Label text in segment */
+  'ring-label'?: string;
+
+  /** Lucide icon name */
+  'ring-icon'?: string;
+
+  /** Progress percentage (0-100) */
+  'ring-progress'?: number;
+
+  /** Visual style */
+  'ring-style'?: RingStyle;
+
+  /** Start date */
+  'date'?: string;
+
+  /** End date */
+  'end-date'?: string;
+}
+
+/**
+ * Color name to CSS color mapping
+ */
+export const RING_COLORS: Record<RingColorName, string> = {
+  // Basis
+  red: '#ef4444',
+  orange: '#f97316',
+  yellow: '#eab308',
+  green: '#22c55e',
+  blue: '#3b82f6',
+  purple: '#a855f7',
+  pink: '#ec4899',
+  // Erweitert
+  teal: '#14b8a6',
+  cyan: '#06b6d4',
+  magenta: '#d946ef',
+  lime: '#84cc16',
+  amber: '#f59e0b',
+  indigo: '#6366f1',
+  violet: '#8b5cf6',
+  rose: '#f43f5e',
+  // Neutral
+  gray: '#6b7280',
+  slate: '#64748b',
+  stone: '#78716c',
+};
+
+/**
+ * Default ring configuration
+ */
+export function createDefaultRing(order: number): RingConfig {
+  return {
+    id: `ring-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    name: `Ring ${order + 1}`,
+    folder: '',
+    color: 'blue',
+    segmentType: 'monthly',
+    enabled: true,
+    order,
+  };
+}
+
+/**
+ * Default Radial Calendar settings
+ */
+export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
+  currentView: 'annual',
+  birthYear: 1990,
+  expectedLifespan: 85,
+  currentYear: new Date().getFullYear(),
+  rings: [],
+  centerDisplay: 'countdown',
+  periodicNotesFormat: {
+    yearly: 'YYYY',
+    monthly: 'YYYY-MM',
+    daily: 'YYYY-MM-DD',
+  },
+  templateFolder: 'Templates',
+};
+
+/**
+ * Template content for ring segment notes
+ */
+export const RING_SEGMENT_TEMPLATE = `---
+# === RADIAL CALENDAR TEMPLATE ===
+# Lösche die Zeilen, die du nicht brauchst
+
+# FARBEN (wähle eine):
+ring-color: blue
+# ring-color: red
+# ring-color: orange
+# ring-color: yellow
+# ring-color: green
+# ring-color: teal
+# ring-color: purple
+# ring-color: magenta
+# ring-color: pink
+# ring-color: cyan
+# ring-color: lime
+# ring-color: amber
+# ring-color: indigo
+
+# STIL (wähle einen):
+ring-style: solid
+# ring-style: striped
+# ring-style: dotted
+# ring-style: gradient
+
+# LABEL & ICON:
+ring-label: ""
+ring-icon: circle
+
+# ZEITRAUM:
+date: {{date}}
+# end-date:
+
+# FORTSCHRITT (0-100):
+# ring-progress: 0
+---
+
+# {{title}}
+
+`;
