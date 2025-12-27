@@ -1217,6 +1217,9 @@ export class RadialCalendarView extends ItemView {
 
   /**
    * Renders a single ring with its entries
+   * If showSpanningArcs is enabled, renders BOTH:
+   * - Daily notes at the bottom portion of the ring
+   * - Spanning arcs stacked on top (10% each)
    */
   private renderRing(
     svg: SVGSVGElement,
@@ -1227,12 +1230,54 @@ export class RadialCalendarView extends ItemView {
     if (!this.config) return;
 
     const ringColor = RING_COLORS[ring.color] || RING_COLORS.blue;
+    const ringHeight = radii.outerRadius - radii.innerRadius;
 
     if (ring.showSpanningArcs) {
-      // Spanning Arcs mode: render continuous arcs from startDate to endDate
-      this.renderSpanningArcsRing(svg, year, ring, radii, ringColor);
+      // Combined mode: spanning arcs on top, daily notes at bottom
+      const arcs = this.config.service.loadSpanningArcs(ring.folder, year, {
+        startDateField: ring.startDateField || 'radcal-start',
+        endDateField: ring.endDateField || 'radcal-end',
+        colorField: ring.colorField || 'radcal-color',
+        labelField: ring.labelField || 'radcal-label',
+      });
+
+      // Calculate space allocation
+      const arcsWithTracks = arcs.length > 0 ? assignTracks(arcs) : [];
+      const trackCount = arcsWithTracks.length > 0 ? getMaxTrackCount(arcsWithTracks) : 0;
+
+      // Each arc track gets 10% of ring height, minimum 70% for daily notes
+      const arcHeightPercent = 0.10;
+      const totalArcHeight = Math.min(trackCount * arcHeightPercent, 0.30); // Max 30% for arcs
+      const dailyNotesHeight = 1 - totalArcHeight;
+
+      // Calculate radii for daily notes (bottom portion)
+      const dailyNotesRadii: RingRadii = {
+        innerRadius: radii.innerRadius,
+        outerRadius: radii.innerRadius + (ringHeight * dailyNotesHeight),
+      };
+
+      // Render daily notes at bottom
+      for (let month = 1; month <= 12; month++) {
+        this.renderRingMonthSegment(svg, year, month, ring, dailyNotesRadii, ringColor);
+      }
+
+      // Render spanning arcs on top (if any)
+      if (arcsWithTracks.length > 0) {
+        const arcsOuterRadius = radii.outerRadius;
+        const arcsInnerRadius = dailyNotesRadii.outerRadius;
+
+        for (const arc of arcsWithTracks) {
+          const arcRadii = computeSubRingRadii(
+            arcsOuterRadius,
+            arcsInnerRadius,
+            trackCount,
+            arc.track
+          );
+          this.renderSpanningArc(svg, arc, arcRadii, ring, ringColor);
+        }
+      }
     } else {
-      // Default: render each month segment for this ring
+      // Default: render only daily notes (full ring height)
       for (let month = 1; month <= 12; month++) {
         this.renderRingMonthSegment(svg, year, month, ring, radii, ringColor);
       }
