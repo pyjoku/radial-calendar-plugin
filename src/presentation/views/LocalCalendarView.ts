@@ -7,9 +7,10 @@
 
 import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
 import type { CalendarService } from '../../application/services/CalendarService';
+import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { RadialCalendarSettings } from '../../core/domain/types';
 import { RING_COLORS } from '../../core/domain/types';
-import { getToday, createLocalDate, getDaysInMonth } from '../../core/domain/models/LocalDate';
+import { getToday, createLocalDate, getDaysInMonth, getWeekday } from '../../core/domain/models/LocalDate';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
 
 export const VIEW_TYPE_LOCAL_CALENDAR = 'local-calendar-view';
@@ -20,8 +21,8 @@ const CENTER = SVG_SIZE / 2;
 const LIFE_RING_OUTER = 140;
 const LIFE_RING_INNER = 115;
 const YEAR_RING_OUTER = 105;
-const YEAR_RING_INNER = 60;
-const CENTER_RADIUS = 50;
+const YEAR_RING_INNER = 40;
+const CENTER_RADIUS = 35;
 
 export interface LocalCalendarViewConfig {
   service: CalendarService;
@@ -201,32 +202,68 @@ export class LocalCalendarView extends ItemView {
   }
 
   private renderYearRing(svg: SVGSVGElement, noteDate: LocalDate, today: LocalDate): void {
-    // Simplified year ring - just show months
+    if (!this.config) return;
+
+    const year = noteDate.year;
+
+    // Render all days of the year as small arcs
+    for (let month = 1; month <= 12; month++) {
+      const daysInMonth = getDaysInMonth(year, month);
+      const startAngle = this.monthToAngle(month);
+      const monthArcSpan = Math.PI / 6; // 30 degrees per month
+      const dayArcSpan = monthArcSpan / daysInMonth;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = createLocalDate(year, month, day);
+        const dayOfWeek = getWeekday(date);
+        const isToday = today.year === year && today.month === month && today.day === day;
+        const isNoteDay = noteDate.month === month && noteDate.day === day;
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+        const dayStartAngle = startAngle + (day - 1) * dayArcSpan;
+        const dayEndAngle = dayStartAngle + dayArcSpan - 0.002;
+
+        // Get entries for this date
+        const entries = this.config.service.getEntriesForDate(date);
+
+        const path = this.createArcPath(YEAR_RING_INNER, YEAR_RING_OUTER, dayStartAngle, dayEndAngle);
+        const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        arc.setAttribute('d', path);
+
+        const classes = ['lc-day'];
+        if (isToday) classes.push('lc-day--today');
+        if (isNoteDay) classes.push('lc-day--note');
+        if (isWeekend) classes.push('lc-day--weekend');
+        if (entries.length > 0) classes.push('lc-day--has-notes');
+        if (entries.length > 2) classes.push('lc-day--many-notes');
+
+        arc.setAttribute('class', classes.join(' '));
+        svg.appendChild(arc);
+      }
+    }
+
+    // Month separators
+    for (let month = 1; month <= 12; month++) {
+      const angle = this.monthToAngle(month) - Math.PI / 2;
+      const x1 = CENTER + YEAR_RING_INNER * Math.cos(angle);
+      const y1 = CENTER + YEAR_RING_INNER * Math.sin(angle);
+      const x2 = CENTER + YEAR_RING_OUTER * Math.cos(angle);
+      const y2 = CENTER + YEAR_RING_OUTER * Math.sin(angle);
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', String(x1));
+      line.setAttribute('y1', String(y1));
+      line.setAttribute('x2', String(x2));
+      line.setAttribute('y2', String(y2));
+      line.setAttribute('class', 'lc-month-separator');
+      svg.appendChild(line);
+    }
+
+    // Month labels (abbreviated) - positioned inside
+    const MONTH_ABBR = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
     for (let month = 0; month < 12; month++) {
-      const startAngle = (month / 12) * 2 * Math.PI;
-      const endAngle = ((month + 1) / 12) * 2 * Math.PI - 0.02;
-
-      const path = this.createArcPath(YEAR_RING_INNER, YEAR_RING_OUTER, startAngle, endAngle);
-      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      arc.setAttribute('d', path);
-
-      const isPast = noteDate.year < today.year ||
-                     (noteDate.year === today.year && month + 1 < today.month);
-      const isCurrent = noteDate.year === today.year && month + 1 === today.month;
-      const isNoteMonth = month + 1 === noteDate.month;
-
-      let cls = 'lc-month';
-      if (isPast) cls += ' lc-month--past';
-      if (isCurrent) cls += ' lc-month--current';
-      if (isNoteMonth) cls += ' lc-month--note';
-
-      arc.setAttribute('class', cls);
-      svg.appendChild(arc);
-
-      // Month label (abbreviated)
-      const MONTH_ABBR = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-      const labelAngle = ((month + 0.5) / 12) * 2 * Math.PI - Math.PI / 2;
-      const labelR = (YEAR_RING_INNER + YEAR_RING_OUTER) / 2;
+      const labelAngle = this.monthToAngle(month + 1) + (Math.PI / 12) - Math.PI / 2;
+      const labelR = YEAR_RING_INNER - 8;
       const x = CENTER + labelR * Math.cos(labelAngle);
       const y = CENTER + labelR * Math.sin(labelAngle);
 
@@ -239,6 +276,11 @@ export class LocalCalendarView extends ItemView {
       label.textContent = MONTH_ABBR[month];
       svg.appendChild(label);
     }
+  }
+
+  private monthToAngle(month: number): number {
+    // January starts at top (12 o'clock position)
+    return ((month - 1) * Math.PI) / 6;
   }
 
   private renderCenter(svg: SVGSVGElement, date: LocalDate): void {
@@ -271,10 +313,8 @@ export class LocalCalendarView extends ItemView {
     const lifeAngle = (lifeAge / lifespan) * 2 * Math.PI - Math.PI / 2;
     this.drawMarker(svg, lifeAngle, LIFE_RING_INNER - 3, LIFE_RING_OUTER + 3, 'lc-marker--note');
 
-    // Year ring marker (blue)
-    const daysInMonth = getDaysInMonth(date.year, date.month);
-    const monthProgress = (date.month - 1 + (date.day - 1) / daysInMonth) / 12;
-    const yearAngle = monthProgress * 2 * Math.PI - Math.PI / 2;
+    // Year ring marker (blue) - using day-based angle
+    const yearAngle = this.dateToAngle(date);
     this.drawMarker(svg, yearAngle, YEAR_RING_INNER - 3, YEAR_RING_OUTER + 3, 'lc-marker--note');
   }
 
@@ -289,11 +329,18 @@ export class LocalCalendarView extends ItemView {
     const lifeAngle = (lifeAge / lifespan) * 2 * Math.PI - Math.PI / 2;
     this.drawMarker(svg, lifeAngle, LIFE_RING_INNER, LIFE_RING_OUTER, 'lc-marker--today');
 
-    // Year ring marker (red, thinner)
-    const daysInMonth = getDaysInMonth(today.year, today.month);
-    const monthProgress = (today.month - 1 + (today.day - 1) / daysInMonth) / 12;
-    const yearAngle = monthProgress * 2 * Math.PI - Math.PI / 2;
+    // Year ring marker (red, thinner) - using day-based angle
+    const yearAngle = this.dateToAngle(today);
     this.drawMarker(svg, yearAngle, YEAR_RING_INNER, YEAR_RING_OUTER, 'lc-marker--today');
+  }
+
+  private dateToAngle(date: LocalDate): number {
+    // Calculate exact position based on day within the year
+    const daysInMonth = getDaysInMonth(date.year, date.month);
+    const startAngle = this.monthToAngle(date.month);
+    const monthArcSpan = Math.PI / 6;
+    const dayArcSpan = monthArcSpan / daysInMonth;
+    return startAngle + (date.day - 0.5) * dayArcSpan - Math.PI / 2;
   }
 
   private drawMarker(

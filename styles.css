@@ -464,31 +464,47 @@
   pointer-events: none;
 }
 
-/* Month Ring */
-.lc-month {
+/* Year Ring Days */
+.lc-day {
   fill: var(--background-primary);
   stroke: var(--background-modifier-border);
-  stroke-width: 0.5;
+  stroke-width: 0.3;
 }
 
-.lc-month--past {
+.lc-day--weekend {
   fill: var(--background-secondary-alt);
+}
+
+.lc-day--today {
+  fill: var(--interactive-accent);
   fill-opacity: 0.4;
 }
 
-.lc-month--current {
-  fill: var(--interactive-accent);
-  fill-opacity: 0.2;
-}
-
-.lc-month--note {
+.lc-day--note {
   fill: var(--text-accent);
   fill-opacity: 0.3;
 }
 
+.lc-day--has-notes {
+  fill: var(--text-accent);
+  fill-opacity: 0.5;
+}
+
+.lc-day--many-notes {
+  fill: var(--text-accent);
+  fill-opacity: 0.7;
+}
+
+/* Month separator */
+.lc-month-separator {
+  stroke: var(--background-modifier-border);
+  stroke-width: 0.5;
+  opacity: 0.6;
+}
+
 .lc-month-label {
-  font-size: 8px;
-  fill: var(--text-muted);
+  font-size: 6px;
+  fill: var(--text-faint);
   pointer-events: none;
 }
 

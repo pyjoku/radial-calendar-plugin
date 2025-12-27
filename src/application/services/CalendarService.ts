@@ -118,6 +118,14 @@ export class CalendarService {
   }
 
   /**
+   * Alias for setCurrentYear - sets the year to display
+   * @param year - The year to display
+   */
+  setYear(year: number): void {
+    this.setCurrentYear(year);
+  }
+
+  /**
    * Navigates to the next year
    */
   nextYear(): void {
