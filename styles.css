@@ -616,3 +616,62 @@
     font-size: 11px;
   }
 }
+
+/* ========================================
+   Radcal Codeblock Styles
+   ======================================== */
+
+.radcal-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  width: 100%;
+}
+
+.radcal-block-content {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.radcal-svg {
+  width: 100%;
+  max-width: 800px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+/* Radcal codeblock tooltip */
+.radcal-tooltip {
+  display: none;
+  position: absolute;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 250px;
+}
+
+/* Radcal codeblock error */
+.radcal-error {
+  color: var(--text-error);
+  padding: 1rem;
+  background: var(--background-modifier-error);
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Codeblock day arc hover effects */
+.radcal-block .rc-day-arc:hover {
+  filter: brightness(1.2);
+}
+
+.radcal-block .rc-day-arc[style*="cursor: pointer"]:hover {
+  filter: brightness(1.3);
+}

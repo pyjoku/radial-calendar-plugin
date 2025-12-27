@@ -1,0 +1,192 @@
+/**
+ * RadcalBlockProcessor - Processes radcal codeblocks
+ *
+ * Handles parsing, rendering, and live updates for radcal codeblocks
+ */
+
+import { MarkdownRenderChild, MarkdownPostProcessorContext } from 'obsidian';
+import type { CalendarService } from '../../application/services/CalendarService';
+import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
+import type { LocalDate } from '../../core/domain/models/LocalDate';
+import { createLocalDate, getDaysInMonth, isLeapYear } from '../../core/domain/models/LocalDate';
+import { parseRadcalConfig } from './RadcalConfigParser';
+import { RadcalRenderer, EntriesByDate } from './RadcalRenderer';
+import type { RadcalBlockConfig } from '../../core/domain/types/radcal-block';
+
+/**
+ * Render child for radcal codeblocks with live updates
+ */
+class RadcalRenderChild extends MarkdownRenderChild {
+  private unsubscribe: (() => void) | null = null;
+
+  constructor(
+    containerEl: HTMLElement,
+    private readonly service: CalendarService,
+    private readonly config: RadcalBlockConfig,
+    private readonly openFile: (path: string) => Promise<void>
+  ) {
+    super(containerEl);
+  }
+
+  onload(): void {
+    // Initial render
+    this.render();
+
+    // Subscribe to entry updates for live refresh
+    this.unsubscribe = this.service.subscribeToUpdates(() => {
+      this.render();
+    });
+  }
+
+  onunload(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+  }
+
+  private render(): void {
+    // Clear container
+    this.containerEl.empty();
+
+    const year = this.config.year ?? this.service.getCurrentYear();
+
+    // Load entries
+    const entries = this.loadFilteredEntries(year);
+
+    // Create renderer and render
+    const renderer = new RadcalRenderer();
+    const svg = renderer.render(
+      this.config,
+      entries,
+      year,
+      (date, dayEntries) => this.handleDayClick(date, dayEntries)
+    );
+
+    // Add tooltip element
+    const tooltipEl = this.containerEl.createDiv({ cls: 'radcal-tooltip' });
+
+    // Wrap SVG in container
+    const wrapper = this.containerEl.createDiv({ cls: 'radcal-block-content' });
+    wrapper.appendChild(svg);
+
+    // Add hover handlers for tooltips
+    this.setupTooltips(svg, tooltipEl, year);
+  }
+
+  private loadFilteredEntries(year: number): EntriesByDate {
+    const result = new Map<string, CalendarEntry[]>();
+    const daysInYear = isLeapYear(year) ? 366 : 365;
+
+    // Build date-to-entries map for the year
+    for (let month = 1; month <= 12; month++) {
+      const daysInMonth = getDaysInMonth(year, month);
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = createLocalDate(year, month, day);
+        const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        let entries = [...this.service.getEntriesForDate(date)];
+
+        // Apply folder filter if specified
+        if (this.config.folder) {
+          const folderFilter = this.config.folder;
+          entries = entries.filter(e =>
+            e.metadata.folder === folderFilter ||
+            e.metadata.folder.startsWith(folderFilter + '/')
+          );
+        }
+
+        // Apply folders filter if specified
+        if (this.config.folders && this.config.folders.length > 0) {
+          const foldersFilter = this.config.folders;
+          entries = entries.filter(e =>
+            foldersFilter.some(f =>
+              e.metadata.folder === f ||
+              e.metadata.folder.startsWith(f + '/')
+            )
+          );
+        }
+
+        if (entries.length > 0) {
+          result.set(dateKey, entries);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  private handleDayClick(date: LocalDate, entries: CalendarEntry[]): void {
+    if (entries.length === 1) {
+      // Open single entry directly
+      this.openFile(entries[0].filePath);
+    } else if (entries.length > 1) {
+      // Open first entry (could add menu later)
+      this.openFile(entries[0].filePath);
+    }
+  }
+
+  private setupTooltips(svg: SVGSVGElement, tooltipEl: HTMLElement, year: number): void {
+    const arcs = svg.querySelectorAll('.rc-day-arc');
+
+    arcs.forEach((arc) => {
+      arc.addEventListener('mouseenter', (e) => {
+        const event = e as MouseEvent;
+        // Extract date from arc position (simplified - could be improved)
+        // For now, just show basic tooltip
+        tooltipEl.style.display = 'block';
+        tooltipEl.style.left = `${event.offsetX + 10}px`;
+        tooltipEl.style.top = `${event.offsetY + 10}px`;
+      });
+
+      arc.addEventListener('mouseleave', () => {
+        tooltipEl.style.display = 'none';
+      });
+    });
+  }
+}
+
+/**
+ * Main processor for radcal codeblocks
+ */
+export class RadcalBlockProcessor {
+  constructor(
+    private readonly service: CalendarService,
+    private readonly openFile: (path: string) => Promise<void>
+  ) {}
+
+  /**
+   * Process a radcal codeblock
+   */
+  process(
+    source: string,
+    el: HTMLElement,
+    ctx: MarkdownPostProcessorContext
+  ): void {
+    try {
+      // Parse configuration
+      const config = parseRadcalConfig(source);
+
+      // Create container
+      const container = el.createDiv({ cls: 'radcal-block' });
+
+      // Create render child for lifecycle management and live updates
+      const renderChild = new RadcalRenderChild(
+        container,
+        this.service,
+        config,
+        this.openFile
+      );
+
+      // Register with context for cleanup
+      ctx.addChild(renderChild);
+
+    } catch (error) {
+      // Show error message
+      el.createDiv({
+        cls: 'radcal-error',
+        text: `Radcal Error: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  }
+}

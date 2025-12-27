@@ -43,6 +43,7 @@ export class CalendarService {
   private currentYear: number;
   private unregisterMetadataListener: (() => void) | null = null;
   private eventListeners: CalendarServiceEvents | null = null;
+  private updateSubscribers: Set<() => void> = new Set();
 
   constructor(app: App, settings: LinearCalendarSettings) {
     this.vaultRepository = new VaultRepository(app);
@@ -81,6 +82,31 @@ export class CalendarService {
    */
   setEventListeners(listeners: CalendarServiceEvents): void {
     this.eventListeners = listeners;
+  }
+
+  /**
+   * Subscribe to entry updates (for codeblock live refresh)
+   * @param callback - Function to call when entries are updated
+   * @returns Unsubscribe function
+   */
+  subscribeToUpdates(callback: () => void): () => void {
+    this.updateSubscribers.add(callback);
+    return () => {
+      this.updateSubscribers.delete(callback);
+    };
+  }
+
+  /**
+   * Notify all subscribers of updates
+   */
+  private notifySubscribers(): void {
+    for (const callback of this.updateSubscribers) {
+      try {
+        callback();
+      } catch (e) {
+        console.error('Radcal subscriber error:', e);
+      }
+    }
   }
 
   /**
@@ -629,6 +655,7 @@ export class CalendarService {
 
     this.entryCache.rebuild(entries);
     this.eventListeners?.onEntriesUpdated();
+    this.notifySubscribers();
   }
 
   /**
@@ -878,5 +905,6 @@ export class CalendarService {
     }
 
     this.eventListeners?.onEntriesUpdated();
+    this.notifySubscribers();
   }
 }

@@ -9,6 +9,7 @@ import { Plugin, WorkspaceLeaf, TFile } from 'obsidian';
 import { CalendarService } from '../application/services/CalendarService';
 import { RadialCalendarView, VIEW_TYPE_RADIAL_CALENDAR } from '../presentation/views/RadialCalendarView';
 import { LocalCalendarView, VIEW_TYPE_LOCAL_CALENDAR } from '../presentation/views/LocalCalendarView';
+import { RadcalBlockProcessor } from '../presentation/codeblock/RadcalBlockProcessor';
 import { RadialCalendarSettingTab } from './RadialCalendarSettingTab';
 import type { RadialCalendarSettings, LinearCalendarSettings, LocalDate } from '../core/domain/types';
 import { DEFAULT_RADIAL_SETTINGS, createLocalDate } from '../core/domain/types';
@@ -72,6 +73,21 @@ export class RadialCalendarPlugin extends Plugin {
       });
       return view;
     });
+
+    // Register radcal codeblock processor
+    const blockProcessor = new RadcalBlockProcessor(
+      this.service!,
+      async (path: string) => {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof TFile) {
+          await this.app.workspace.getLeaf().openFile(file);
+        }
+      }
+    );
+    this.registerMarkdownCodeBlockProcessor(
+      'radcal',
+      (source, el, ctx) => blockProcessor.process(source, el, ctx)
+    );
 
     // Add settings tab
     this.addSettingTab(new RadialCalendarSettingTab(this.app, this));
