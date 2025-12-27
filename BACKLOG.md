@@ -25,11 +25,38 @@
   ```
 - Ähnlich wie GitHub Contribution Graph, aber radial
 
+### Ring-Beschriftungen am Außenrand
+- Labels für jeden Ring am äußeren Rand (wie "ACT 1", "Kalender", etc.)
+- Rotiert entlang der Kurve
+- Zeigt welcher Ring was darstellt
+
+### Metadata-Boxen an Segment-Grenzen
+- Kleine Kästchen zwischen Scenes/Arcs
+- Zeigen zusätzliche Metadaten (Zahlen, Prozent, Status)
+- Inspiriert von Radial Timeline Plugin
+
+### Filter-Toggles im Zentrum
+- Verschiedene Modi zum Filtern nach Properties
+- Z/A/H/P Style Buttons
+- Schnelles Umschalten zwischen Ansichten
+
+### Detail-Panel bei Hover/Klick
+- Seitliches Panel mit ausführlichen Infos zum ausgewählten Element
+- Titel, Datum, Beschreibung
+- Farbcodierte Tags und Labels
+- Verknüpfte Notizen/Charaktere/Orte
+
+### Verbindungslinien zwischen Arcs
+- Linien die Beziehungen zwischen Events zeigen
+- Storyline-Tracking über das Jahr
+- Visualisiert Zusammenhänge
+
 ### Weitere Ideen
 - [ ] Drag & Drop zum Verschieben von Notizen zwischen Tagen
 - [ ] Export als Bild (SVG/PNG)
 - [ ] Keyboard Navigation
 - [ ] Animationen bei View-Wechsel
+- [ ] Detaillierte Arc-Labels mit Metadaten
 
 ---
 

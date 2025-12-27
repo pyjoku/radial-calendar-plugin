@@ -67,6 +67,28 @@ class RadcalRenderChild extends MarkdownRenderChild {
       (event, date, dayEntries) => this.handleDayClick(event, date, dayEntries)
     );
 
+    // Add header with edit button
+    const header = this.containerEl.createDiv({ cls: 'radcal-block-header' });
+    const editBtn = header.createEl('button', {
+      cls: 'radcal-edit-btn',
+      attr: { 'aria-label': 'Edit source' }
+    });
+    editBtn.innerHTML = '&lt;/&gt;';
+    editBtn.addEventListener('click', () => {
+      // Get the active view and switch to source mode
+      const view = this.app.workspace.getActiveViewOfType(
+        require('obsidian').MarkdownView
+      );
+      if (view) {
+        // @ts-ignore - getMode exists but not in types
+        const currentMode = view.getMode?.() || view.currentMode;
+        if (currentMode === 'preview') {
+          // @ts-ignore - setState exists
+          view.setState?.({ mode: 'source' }, { history: false });
+        }
+      }
+    });
+
     // Add tooltip element
     const tooltipEl = this.containerEl.createDiv({ cls: 'radcal-tooltip' });
 
