@@ -1,7 +1,7 @@
 {
   "id": "radial-calendar-plugin",
   "name": "Radial Calendar",
-  "version": "1.12.2",
+  "version": "1.13.0",
   "minAppVersion": "1.0.0",
   "description": "A beautiful radial calendar view that displays the entire year as a circular visualization with notes",
   "author": "Jochen",
