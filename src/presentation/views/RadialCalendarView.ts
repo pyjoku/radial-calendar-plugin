@@ -1025,6 +1025,41 @@ export class RadialCalendarView extends ItemView {
 
     // Render today marker
     this.renderTodayMarker(svg, year);
+
+    // Render year boundary marker (between Dec 31 and Jan 1)
+    this.renderYearBoundaryMarker(svg);
+  }
+
+  /**
+   * Renders a marker at the year boundary (top of circle, between Dec 31 and Jan 1)
+   */
+  private renderYearBoundaryMarker(svg: SVGSVGElement): void {
+    // Year boundary is at angle 0 (top of circle, 12 o'clock position)
+    const angle = -Math.PI / 2; // 0 degrees in SVG coordinates
+
+    const x1 = CENTER + (INNER_RADIUS - 5) * Math.cos(angle);
+    const y1 = CENTER + (INNER_RADIUS - 5) * Math.sin(angle);
+    const x2 = CENTER + (OUTER_RADIUS + 5) * Math.cos(angle);
+    const y2 = CENTER + (OUTER_RADIUS + 5) * Math.sin(angle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-year-boundary-marker');
+    svg.appendChild(line);
+
+    // Add small label
+    const labelY = CENTER - OUTER_RADIUS - 12;
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', String(CENTER));
+    label.setAttribute('y', String(labelY));
+    label.setAttribute('class', 'rc-year-boundary-label');
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'central');
+    label.textContent = '▼';
+    svg.appendChild(label);
   }
 
   /**
@@ -1425,7 +1460,8 @@ export class RadialCalendarView extends ItemView {
     arcEl.setAttribute('class', 'rc-ring-arc');
 
     // Use arc color or fallback
-    arcEl.style.fill = arc.color || fallbackColor;
+    const arcColor = arc.color || fallbackColor;
+    arcEl.style.fill = arcColor;
 
     // Click handler to open file
     if (arc.filePath) {
@@ -1443,10 +1479,55 @@ export class RadialCalendarView extends ItemView {
 
     svg.appendChild(arcEl);
 
+    // Add continuation indicators for cross-year arcs
+    if (arc.continuesFromPreviousYear) {
+      this.renderCrossYearIndicator(svg, radii, 0, arcColor, 'start'); // At Jan 1
+    }
+    if (arc.continuesIntoNextYear) {
+      this.renderCrossYearIndicator(svg, radii, 2 * Math.PI - 0.001, arcColor, 'end'); // At Dec 31
+    }
+
     // Render label if space permits (arc spans more than ~15 degrees)
     if (arc.label && (arc.endAngle - arc.startAngle) > 0.26) {
       this.renderSpanningArcLabel(svg, arc, radii);
     }
+  }
+
+  /**
+   * Renders an indicator showing an arc continues from/into another year
+   */
+  private renderCrossYearIndicator(
+    svg: SVGSVGElement,
+    radii: { inner: number; outer: number },
+    angle: number,
+    color: string,
+    type: 'start' | 'end'
+  ): void {
+    const midRadius = (radii.inner + radii.outer) / 2;
+    const adjustedAngle = angle - Math.PI / 2; // Adjust for SVG coordinates
+
+    // Create a small triangle pointing in/out of the year
+    const triSize = (radii.outer - radii.inner) * 0.4;
+    const cx = CENTER + midRadius * Math.cos(adjustedAngle);
+    const cy = CENTER + midRadius * Math.sin(adjustedAngle);
+
+    // Triangle points based on direction
+    const direction = type === 'start' ? 1 : -1; // 1 = pointing right (into year), -1 = pointing left (out of year)
+    const perpAngle = adjustedAngle + (Math.PI / 2);
+
+    const points = [
+      // Tip of triangle (pointing in direction of continuation)
+      `${cx + direction * triSize * Math.cos(adjustedAngle)},${cy + direction * triSize * Math.sin(adjustedAngle)}`,
+      // Base corners
+      `${cx + triSize * 0.5 * Math.cos(perpAngle)},${cy + triSize * 0.5 * Math.sin(perpAngle)}`,
+      `${cx - triSize * 0.5 * Math.cos(perpAngle)},${cy - triSize * 0.5 * Math.sin(perpAngle)}`,
+    ].join(' ');
+
+    const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    triangle.setAttribute('points', points);
+    triangle.setAttribute('class', 'rc-cross-year-indicator');
+    triangle.style.fill = color;
+    svg.appendChild(triangle);
   }
 
   /**

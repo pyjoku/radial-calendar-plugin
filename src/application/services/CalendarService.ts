@@ -543,9 +543,13 @@ export class CalendarService {
         continue; // Event doesn't overlap with this year
       }
 
+      // Check if event crosses year boundaries
+      const continuesFromPreviousYear = this.compareDates(startDate, yearStart) < 0;
+      const continuesIntoNextYear = this.compareDates(endDate, yearEnd) > 0;
+
       // Clamp dates to the year boundaries
-      const clampedStart = this.compareDates(startDate, yearStart) < 0 ? yearStart : startDate;
-      const clampedEnd = this.compareDates(endDate, yearEnd) > 0 ? yearEnd : endDate;
+      const clampedStart = continuesFromPreviousYear ? yearStart : startDate;
+      const clampedEnd = continuesIntoNextYear ? yearEnd : endDate;
 
       // Get color (undefined if not set - allows ring color fallback)
       const colorStr = frontmatter[config.colorField];
@@ -570,6 +574,8 @@ export class CalendarService {
         endAngle,
         color: hexColor, // undefined means use ring's fallback color
         entries: [],
+        continuesFromPreviousYear,
+        continuesIntoNextYear,
       });
     }
 

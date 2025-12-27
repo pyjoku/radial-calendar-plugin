@@ -602,6 +602,12 @@ export interface RenderedSegment {
 
   /** Category for grouping (e.g., "Wohnorte", "Sport") */
   category?: string;
+
+  /** Indicates this arc continues from the previous year */
+  continuesFromPreviousYear?: boolean;
+
+  /** Indicates this arc continues into the next year */
+  continuesIntoNextYear?: boolean;
 }
 
 /**

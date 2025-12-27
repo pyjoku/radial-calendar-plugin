@@ -296,6 +296,27 @@
   opacity: 0.6;
 }
 
+/* Year boundary marker (between Dec 31 and Jan 1) */
+.rc-year-boundary-marker {
+  stroke: var(--text-accent);
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+  opacity: 0.8;
+}
+
+.rc-year-boundary-label {
+  fill: var(--text-accent);
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* Cross-year continuation indicator */
+.rc-cross-year-indicator {
+  opacity: 0.9;
+  stroke: var(--background-primary);
+  stroke-width: 1;
+}
+
 /* Outer Segment Ticks and Labels */
 .rc-segment-tick {
   stroke: var(--text-muted);
