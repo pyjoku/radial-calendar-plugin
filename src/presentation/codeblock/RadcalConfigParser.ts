@@ -151,13 +151,14 @@ export function parseRadcalConfig(source: string): RadcalBlockConfig {
         config.folder = cleanValue;
         break;
       case 'filter':
+      case 'filters': // Bases compatibility
         if (cleanValue) {
           // Inline filter string
           config.filter = cleanValue;
         } else {
           // Start YAML filter block
           inFilterBlock = true;
-          filterIndent = line.indexOf('filter');
+          filterIndent = line.indexOf(key); // Use actual key position
         }
         break;
       case 'showLabels':
