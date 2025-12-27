@@ -426,6 +426,134 @@ export class CalendarService {
     });
   }
 
+  // ============================================================================
+  // Spanning Arcs (Multi-Day Events for Annual View)
+  // ============================================================================
+
+  /**
+   * Loads spanning arcs (multi-day events) from a folder for the annual view.
+   *
+   * Each file in the folder should have YAML frontmatter with configurable
+   * date properties. Events that overlap with the specified year are included.
+   *
+   * @param folder - The folder path to load events from
+   * @param year - The year to filter events for
+   * @param config - Field name configuration
+   * @returns Array of rendered segments with angles for the year ring
+   */
+  loadSpanningArcs(
+    folder: string,
+    year: number,
+    config: {
+      startDateField: string;
+      endDateField: string;
+      colorField: string;
+      labelField: string;
+    } = {
+      startDateField: 'radcal-start',
+      endDateField: 'radcal-end',
+      colorField: 'radcal-color',
+      labelField: 'radcal-label',
+    }
+  ): import('../../../core/domain/types').RenderedSegment[] {
+    if (!folder) return [];
+
+    const files = this.vaultRepository.getAllMarkdownFiles();
+    const segments: import('../../../core/domain/types').RenderedSegment[] = [];
+
+    // Filter files in the specified folder
+    const folderPrefix = folder.endsWith('/') ? folder : `${folder}/`;
+    const folderFiles = files.filter(
+      (f) => f.path === `${folder}.md` || f.path.startsWith(folderPrefix)
+    );
+
+    const yearStart = createLocalDate(year, 1, 1);
+    const yearEnd = createLocalDate(year, 12, 31);
+
+    for (const fileInfo of folderFiles) {
+      const metadata = this.metadataRepository.getMetadataByPath(fileInfo.path);
+      const frontmatter = metadata?.frontmatter;
+
+      if (!frontmatter) continue;
+
+      // Parse start date
+      const startStr = frontmatter[config.startDateField];
+      if (!startStr || typeof startStr !== 'string') continue;
+
+      const startDate = this.parseYAMLDate(startStr);
+      if (!startDate) continue;
+
+      // Parse end date (required for spanning arcs)
+      const endStr = frontmatter[config.endDateField];
+      let endDate: LocalDate | null = null;
+      if (endStr && typeof endStr === 'string' && endStr.trim() !== '') {
+        endDate = this.parseYAMLDate(endStr);
+      }
+
+      // If no end date, treat as single-day event
+      if (!endDate) {
+        endDate = startDate;
+      }
+
+      // Check if event overlaps with the year
+      if (endDate.year < year || startDate.year > year) {
+        continue; // Event doesn't overlap with this year
+      }
+
+      // Clamp dates to the year boundaries
+      const clampedStart = this.compareDates(startDate, yearStart) < 0 ? yearStart : startDate;
+      const clampedEnd = this.compareDates(endDate, yearEnd) > 0 ? yearEnd : endDate;
+
+      // Get color (default to blue)
+      const colorStr = frontmatter[config.colorField];
+      const color: RingColorName = this.isValidColor(colorStr) ? colorStr : 'blue';
+
+      // Get label (default to filename)
+      const label = frontmatter[config.labelField] || fileInfo.basename;
+
+      // Convert dates to angles (0 = Jan 1, 2π = Dec 31)
+      const startAngle = this.dateToYearAngle(clampedStart, year);
+      const endAngle = this.dateToYearAngle(clampedEnd, year);
+
+      // Get hex color
+      const { RING_COLORS } = require('../../core/domain/types');
+      const hexColor = RING_COLORS[color] || RING_COLORS.blue;
+
+      segments.push({
+        id: fileInfo.path,
+        filePath: fileInfo.path,
+        label: String(label),
+        startAngle,
+        endAngle,
+        color: hexColor,
+        entries: [],
+      });
+    }
+
+    // Sort by start angle
+    return segments.sort((a, b) => a.startAngle - b.startAngle);
+  }
+
+  /**
+   * Converts a date to an angle for the year ring (0 = Jan 1, 2π = Dec 31)
+   */
+  private dateToYearAngle(date: LocalDate, year: number): number {
+    const daysInYear = this.isLeapYear(year) ? 366 : 365;
+    const dayOfYear = this.getDayOfYear(date);
+    // Map day 1-365/366 to angle 0-2π
+    return ((dayOfYear - 1) / daysInYear) * 2 * Math.PI;
+  }
+
+  /**
+   * Compares two LocalDate objects
+   * Returns negative if a < b, positive if a > b, 0 if equal
+   */
+  private compareDates(a: LocalDate, b: LocalDate): number {
+    if (a.year !== b.year) return a.year - b.year;
+    if (a.month !== b.month) return a.month - b.month;
+    return a.day - b.day;
+  }
+
   /**
    * Calculates days between two dates
    */

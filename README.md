@@ -22,12 +22,16 @@ A beautiful circular/radial calendar visualization for [Obsidian](https://obsidi
 
 ## Installation
 
-### From Obsidian Community Plugins (Recommended)
+### Using BRAT (Recommended for Beta)
 
-1. Open Obsidian Settings
-2. Go to Community Plugins and disable Safe Mode
-3. Click Browse and search for "Radial Calendar"
-4. Install and enable the plugin
+This plugin is currently in beta. Use the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat) to install:
+
+1. Install the BRAT plugin from Obsidian Community Plugins
+2. Open BRAT settings
+3. Click "Add Beta Plugin"
+4. Enter: `pyjoku/radial-calendar-plugin`
+5. Click "Add Plugin"
+6. Enable "Radial Calendar" in Settings → Community Plugins
 
 ### Manual Installation
 
@@ -108,6 +112,50 @@ Each ring can have:
 - Folder filter
 - Color (18 colors available)
 - Order (0 = outermost)
+- Spanning Arcs mode (for multi-day events)
+
+### Spanning Arcs (Multi-Day Events)
+
+Enable "Spanning Arcs" mode for a ring to display multi-day events as continuous arcs instead of individual day segments.
+
+**Setup:**
+1. Create a ring with a folder (e.g., `Projects`)
+2. Enable "Spanning Arcs" in the ring settings
+3. Configure the YAML property names (or use defaults)
+
+**Default properties:**
+- `radcal-start` - Start date (YYYY-MM-DD)
+- `radcal-end` - End date (YYYY-MM-DD)
+- `radcal-color` - Color name (optional)
+- `radcal-label` - Display label (optional, defaults to filename)
+
+**Example: Project Note**
+
+```yaml
+---
+radcal-start: 2025-03-01
+radcal-end: 2025-06-15
+radcal-color: blue
+radcal-label: Website Redesign
+---
+
+# Website Redesign Project
+
+Project details...
+```
+
+**Example: Vacation**
+
+```yaml
+---
+radcal-start: 2025-07-10
+radcal-end: 2025-07-24
+radcal-color: teal
+radcal-label: Summer Vacation
+---
+```
+
+Overlapping events are automatically placed in separate tracks within the ring.
 
 ### Outer Segments
 

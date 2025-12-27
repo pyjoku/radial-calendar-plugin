@@ -547,6 +547,15 @@ export interface RingConfig {
 
   /** Show labels on segments */
   readonly showLabels?: boolean;
+
+  // ======== Spanning Arcs (Multi-Day Events) ========
+
+  /**
+   * Enable spanning arcs mode for this ring.
+   * Instead of showing day-based segments, shows continuous arcs
+   * from startDate to endDate read from YAML frontmatter.
+   */
+  readonly showSpanningArcs?: boolean;
 }
 
 /**

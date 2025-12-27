@@ -1027,9 +1027,163 @@ export class RadialCalendarView extends ItemView {
 
     const ringColor = RING_COLORS[ring.color] || RING_COLORS.blue;
 
-    // Render each month segment for this ring
-    for (let month = 1; month <= 12; month++) {
-      this.renderRingMonthSegment(svg, year, month, ring, radii, ringColor);
+    if (ring.showSpanningArcs) {
+      // Spanning Arcs mode: render continuous arcs from startDate to endDate
+      this.renderSpanningArcsRing(svg, year, ring, radii, ringColor);
+    } else {
+      // Default: render each month segment for this ring
+      for (let month = 1; month <= 12; month++) {
+        this.renderRingMonthSegment(svg, year, month, ring, radii, ringColor);
+      }
+    }
+  }
+
+  /**
+   * Renders a ring with spanning arcs (multi-day events)
+   */
+  private renderSpanningArcsRing(
+    svg: SVGSVGElement,
+    year: number,
+    ring: RingConfig,
+    radii: RingRadii,
+    ringColor: string
+  ): void {
+    if (!this.config) return;
+
+    // Load spanning arcs from the folder
+    const arcs = this.config.service.loadSpanningArcs(ring.folder, year, {
+      startDateField: ring.startDateField || 'radcal-start',
+      endDateField: ring.endDateField || 'radcal-end',
+      colorField: ring.colorField || 'radcal-color',
+      labelField: ring.labelField || 'radcal-label',
+    });
+
+    if (arcs.length === 0) {
+      // Render empty ring background
+      this.renderEmptyRingBackground(svg, radii);
+      return;
+    }
+
+    // Assign tracks for overlapping arcs
+    const arcsWithTracks = assignTracks(arcs);
+    const trackCount = getMaxTrackCount(arcsWithTracks);
+
+    // Render each spanning arc
+    for (const arc of arcsWithTracks) {
+      const arcRadii = computeSubRingRadii(
+        radii.outerRadius,
+        radii.innerRadius,
+        trackCount,
+        arc.track
+      );
+      this.renderSpanningArc(svg, arc, arcRadii, ring, ringColor);
+    }
+  }
+
+  /**
+   * Renders an empty ring background (for rings with no entries)
+   */
+  private renderEmptyRingBackground(svg: SVGSVGElement, radii: RingRadii): void {
+    const path = this.createArcPath(radii.innerRadius, radii.outerRadius, 0, 2 * Math.PI - 0.001);
+    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    arc.setAttribute('d', path);
+    arc.setAttribute('class', 'rc-ring-arc');
+    arc.style.fill = 'var(--background-secondary)';
+    arc.style.fillOpacity = '0.3';
+    svg.appendChild(arc);
+  }
+
+  /**
+   * Renders a single spanning arc
+   */
+  private renderSpanningArc(
+    svg: SVGSVGElement,
+    arc: PhaseWithTrack,
+    radii: { inner: number; outer: number },
+    ring: RingConfig,
+    fallbackColor: string
+  ): void {
+    if (!this.config) return;
+
+    // Create arc path
+    const path = this.createArcPath(radii.inner, radii.outer, arc.startAngle, arc.endAngle);
+
+    const arcEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    arcEl.setAttribute('d', path);
+    arcEl.setAttribute('class', 'rc-ring-arc');
+
+    // Use arc color or fallback
+    arcEl.style.fill = arc.color || fallbackColor;
+
+    // Click handler to open file
+    if (arc.filePath) {
+      arcEl.style.cursor = 'pointer';
+      arcEl.addEventListener('click', () => {
+        this.config?.openFile(arc.filePath!);
+      });
+    }
+
+    // Hover tooltip
+    arcEl.addEventListener('mouseenter', (e) => {
+      this.showSpanningArcTooltip(e, arc, ring);
+    });
+    arcEl.addEventListener('mouseleave', () => this.hideTooltip());
+
+    svg.appendChild(arcEl);
+
+    // Render label if space permits (arc spans more than ~15 degrees)
+    if (arc.label && (arc.endAngle - arc.startAngle) > 0.26) {
+      this.renderSpanningArcLabel(svg, arc, radii);
+    }
+  }
+
+  /**
+   * Renders a label on a spanning arc
+   */
+  private renderSpanningArcLabel(
+    svg: SVGSVGElement,
+    arc: PhaseWithTrack,
+    radii: { inner: number; outer: number }
+  ): void {
+    const midAngle = (arc.startAngle + arc.endAngle) / 2 - Math.PI / 2;
+    const labelRadius = (radii.inner + radii.outer) / 2;
+    const x = CENTER + labelRadius * Math.cos(midAngle);
+    const y = CENTER + labelRadius * Math.sin(midAngle);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', String(x));
+    text.setAttribute('y', String(y));
+    text.setAttribute('class', 'rc-phase-label');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'central');
+
+    // Rotate for readability
+    const rotationDeg = (midAngle + Math.PI / 2) * 180 / Math.PI;
+    const adjustedRotation = rotationDeg > 90 && rotationDeg < 270 ? rotationDeg + 180 : rotationDeg;
+    text.setAttribute('transform', `rotate(${adjustedRotation}, ${x}, ${y})`);
+
+    text.textContent = arc.label;
+    svg.appendChild(text);
+  }
+
+  /**
+   * Shows tooltip for spanning arc hover
+   */
+  private showSpanningArcTooltip(event: MouseEvent, arc: PhaseWithTrack, ring: RingConfig): void {
+    if (!this.tooltipEl) return;
+
+    let content = `<div class="rc-tooltip-ring" style="color: ${arc.color}">${ring.name}</div>`;
+    content += `<div class="rc-tooltip-date">${arc.label}</div>`;
+
+    this.tooltipEl.innerHTML = content;
+    this.tooltipEl.style.display = 'block';
+
+    const rect = this.containerEl_?.getBoundingClientRect();
+    if (rect) {
+      const x = event.clientX - rect.left + 10;
+      const y = event.clientY - rect.top + 10;
+      this.tooltipEl.style.left = `${x}px`;
+      this.tooltipEl.style.top = `${y}px`;
     }
   }
 

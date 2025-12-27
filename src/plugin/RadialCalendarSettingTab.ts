@@ -343,6 +343,24 @@ phase-label: Grundschule<br>
           });
       });
 
+    // Spanning Arcs toggle
+    new Setting(ringContainer)
+      .setName('Spanning Arcs')
+      .setDesc('Multi-Day Events als durchgehende Bögen anzeigen')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(ring.showSpanningArcs ?? false)
+          .onChange(async (value) => {
+            await this.updateRing(index, { showSpanningArcs: value });
+            this.display(); // Refresh to show/hide property fields
+          });
+      });
+
+    // Spanning Arcs property fields (conditional)
+    if (ring.showSpanningArcs) {
+      this.createSpanningArcsPropertySettings(ringContainer, ring, index);
+    }
+
     // Delete button
     new Setting(ringContainer)
       .addButton((button) => {
@@ -375,6 +393,69 @@ phase-label: Grundschule<br>
     rings[index] = { ...rings[index], ...updates };
     this.plugin.settings.rings = rings;
     await this.plugin.saveSettings();
+  }
+
+  /**
+   * Creates property settings for spanning arcs mode
+   */
+  private createSpanningArcsPropertySettings(
+    containerEl: HTMLElement,
+    ring: RingConfig,
+    index: number
+  ): void {
+    const propsContainer = containerEl.createDiv({ cls: 'radial-calendar-segment-config' });
+
+    // Start Date Property
+    new Setting(propsContainer)
+      .setName('Start-Datum Property')
+      .setDesc('YAML-Frontmatter Feld für Startdatum')
+      .addText((text) => {
+        text
+          .setPlaceholder('radcal-start')
+          .setValue(ring.startDateField || 'radcal-start')
+          .onChange(async (value) => {
+            this.updateRing(index, { startDateField: value || 'radcal-start' });
+          });
+      });
+
+    // End Date Property
+    new Setting(propsContainer)
+      .setName('End-Datum Property')
+      .setDesc('YAML-Frontmatter Feld für Enddatum')
+      .addText((text) => {
+        text
+          .setPlaceholder('radcal-end')
+          .setValue(ring.endDateField || 'radcal-end')
+          .onChange(async (value) => {
+            this.updateRing(index, { endDateField: value || 'radcal-end' });
+          });
+      });
+
+    // Color Property
+    new Setting(propsContainer)
+      .setName('Farbe Property')
+      .setDesc('YAML-Frontmatter Feld für Farbe')
+      .addText((text) => {
+        text
+          .setPlaceholder('radcal-color')
+          .setValue(ring.colorField || 'radcal-color')
+          .onChange(async (value) => {
+            this.updateRing(index, { colorField: value || 'radcal-color' });
+          });
+      });
+
+    // Label Property
+    new Setting(propsContainer)
+      .setName('Label Property')
+      .setDesc('YAML-Frontmatter Feld für Beschriftung')
+      .addText((text) => {
+        text
+          .setPlaceholder('radcal-label')
+          .setValue(ring.labelField || 'radcal-label')
+          .onChange(async (value) => {
+            this.updateRing(index, { labelField: value || 'radcal-label' });
+          });
+      });
   }
 
   /**
