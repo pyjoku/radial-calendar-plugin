@@ -1,6 +1,6 @@
 {
   "name": "radial-calendar-plugin",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A radial calendar view for Obsidian - displays the year as a circular visualization",
   "main": "main.js",
   "scripts": {

@@ -298,6 +298,87 @@
   font-weight: 500;
 }
 
+/* ============================================
+   Life View (Nested Clock) Styles
+   ============================================ */
+
+/* Life Ring Years */
+.rc-life-year {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 0.5;
+  cursor: pointer;
+  transition: fill 0.15s ease;
+}
+
+.rc-life-year:hover {
+  fill: var(--background-modifier-hover);
+}
+
+.rc-life-year--past {
+  fill: var(--background-secondary-alt);
+  fill-opacity: 0.6;
+}
+
+.rc-life-year--current {
+  fill: var(--interactive-accent);
+  fill-opacity: 0.3;
+}
+
+.rc-life-year--selected {
+  fill: var(--text-accent);
+  fill-opacity: 0.2;
+  stroke: var(--text-accent);
+  stroke-width: 1;
+}
+
+/* Life Year Labels */
+.rc-life-year-label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Life Position Markers */
+.rc-life-marker--today {
+  stroke: var(--text-error);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.rc-life-marker--viewed {
+  stroke: var(--text-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 4 2;
+}
+
+/* Life Acts */
+.rc-life-act {
+  fill: var(--text-accent);
+  fill-opacity: 0.6;
+}
+
+.rc-life-act-label {
+  font-size: 7px;
+  font-weight: 500;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Center Display for Nested Clock */
+.rc-center-year {
+  font-size: 32px;
+  font-weight: 700;
+  fill: var(--text-normal);
+}
+
+.rc-center-age {
+  font-size: 14px;
+  fill: var(--text-muted);
+}
+
 /* Settings: Segment and Life Act Config */
 .radial-calendar-segment-config,
 .radial-calendar-life-act-config {

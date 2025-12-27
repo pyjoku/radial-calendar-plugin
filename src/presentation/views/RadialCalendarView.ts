@@ -31,17 +31,30 @@ const FULL_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June'
 // SVG Constants
 const SVG_SIZE = 800;
 const CENTER = SVG_SIZE / 2;
+
+// Nested Clock Layout (Life View)
+// Outer ring: Life (birth to expected end)
+// Inner ring: Year (12 months)
+const LIFE_RING_OUTER = 380;
+const LIFE_RING_INNER = 320;
+const YEAR_RING_OUTER = 310;
+const YEAR_RING_INNER = 180;
+const CENTER_RADIUS = 170;
+
+// Annual View Layout (single year focus)
 const OUTER_RADIUS = 380;
 const INNER_RADIUS = 120;
 const MONTH_LABEL_RADIUS = 100;
-const DAY_RING_WIDTH = (OUTER_RADIUS - INNER_RADIUS) / 31; // Approximate width per day ring
-const RING_GAP = 4; // Gap between rings in pixels
-const MIN_RING_WIDTH = 20; // Minimum width for a ring
+
+// Shared constants
+const DAY_RING_WIDTH = (OUTER_RADIUS - INNER_RADIUS) / 31;
+const RING_GAP = 4;
+const MIN_RING_WIDTH = 20;
 
 // Outer segment constants
-const SEGMENT_TICK_INNER = OUTER_RADIUS + 2;  // Start of tick mark
-const SEGMENT_TICK_OUTER = OUTER_RADIUS + 8;  // End of tick mark
-const SEGMENT_LABEL_RADIUS = OUTER_RADIUS + 14; // Position for labels
+const SEGMENT_TICK_INNER = OUTER_RADIUS + 2;
+const SEGMENT_TICK_OUTER = OUTER_RADIUS + 8;
+const SEGMENT_LABEL_RADIUS = OUTER_RADIUS + 14;
 
 /**
  * Calculated radii for a ring
@@ -216,6 +229,373 @@ export class RadialCalendarView extends ItemView {
     svg.setAttribute('class', 'rc-svg');
     this.svgEl = svg;
 
+    const isLifeView = this.config.settings.currentView === 'life';
+
+    if (isLifeView) {
+      // Nested Clock: Life ring outer, Year ring inner
+      this.renderNestedClock(svg, year);
+    } else {
+      // Annual View: Full year with optional folder rings
+      this.renderAnnualView(svg, year);
+    }
+
+    wrapper.appendChild(svg);
+  }
+
+  /**
+   * Renders the nested clock view (Life View)
+   * Outer ring: Life timeline (birth to expected end)
+   * Inner ring: Current year (12 months)
+   */
+  private renderNestedClock(svg: SVGSVGElement, year: number): void {
+    if (!this.config) return;
+
+    const { birthYear, expectedLifespan } = this.config.settings;
+    const endYear = birthYear + expectedLifespan;
+    const today = getToday();
+    const currentAge = today.year - birthYear;
+
+    // Background
+    this.renderBackgroundCircle(svg);
+
+    // 1. Render Life Ring (outer)
+    this.renderLifeRing(svg, birthYear, endYear, year);
+
+    // 2. Render Year Ring (inner)
+    this.renderYearRing(svg, year);
+
+    // 3. Life Acts (if configured)
+    this.renderLifeActsOnRing(svg, birthYear, expectedLifespan);
+
+    // 4. Center with info
+    this.renderNestedCenter(svg, year, currentAge);
+
+    // 5. Today marker on life ring
+    this.renderLifePositionMarker(svg, birthYear, expectedLifespan, today.year, 'today');
+
+    // 6. Viewed year marker on life ring (if different from today)
+    if (year !== today.year) {
+      this.renderLifePositionMarker(svg, birthYear, expectedLifespan, year, 'viewed');
+    }
+
+    // 7. Today marker on year ring
+    if (year === today.year) {
+      this.renderTodayMarkerOnYearRing(svg);
+    }
+  }
+
+  /**
+   * Renders the life ring (outer ring showing years)
+   */
+  private renderLifeRing(svg: SVGSVGElement, birthYear: number, endYear: number, selectedYear: number): void {
+    const totalYears = endYear - birthYear;
+    const today = getToday();
+
+    for (let y = birthYear; y < endYear; y++) {
+      const yearIndex = y - birthYear;
+      const startAngle = (yearIndex / totalYears) * 2 * Math.PI;
+      const endAngle = ((yearIndex + 1) / totalYears) * 2 * Math.PI - 0.01;
+
+      const isPast = y < today.year;
+      const isCurrent = y === today.year;
+      const isSelected = y === selectedYear;
+
+      const path = this.createArcPath(LIFE_RING_INNER, LIFE_RING_OUTER, startAngle, endAngle);
+      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arc.setAttribute('d', path);
+
+      let cls = 'rc-life-year';
+      if (isPast) cls += ' rc-life-year--past';
+      if (isCurrent) cls += ' rc-life-year--current';
+      if (isSelected) cls += ' rc-life-year--selected';
+
+      arc.setAttribute('class', cls);
+      arc.setAttribute('data-year', String(y));
+
+      // Click to navigate to that year
+      arc.addEventListener('click', () => {
+        this.config?.service.setYear(y);
+      });
+
+      // Hover tooltip
+      arc.addEventListener('mouseenter', (e) => {
+        this.showLifeYearTooltip(e, y, y - birthYear);
+      });
+      arc.addEventListener('mouseleave', () => this.hideTooltip());
+
+      svg.appendChild(arc);
+    }
+
+    // Year labels at key positions (every 10 years)
+    for (let y = birthYear; y <= endYear; y += 10) {
+      const yearIndex = y - birthYear;
+      const angle = (yearIndex / totalYears) * 2 * Math.PI - Math.PI / 2;
+      const labelRadius = LIFE_RING_OUTER + 12;
+      const x = CENTER + labelRadius * Math.cos(angle);
+      const yPos = CENTER + labelRadius * Math.sin(angle);
+
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', String(x));
+      label.setAttribute('y', String(yPos));
+      label.setAttribute('class', 'rc-life-year-label');
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('dominant-baseline', 'central');
+      label.textContent = String(y);
+      svg.appendChild(label);
+    }
+  }
+
+  /**
+   * Renders the year ring (inner ring showing months)
+   */
+  private renderYearRing(svg: SVGSVGElement, year: number): void {
+    if (!this.config) return;
+
+    const today = getToday();
+
+    for (let month = 1; month <= 12; month++) {
+      const daysInMonth = getDaysInMonth(year, month);
+      const startAngle = this.monthToAngle(month);
+      const monthArcSpan = Math.PI / 6;
+      const dayArcSpan = monthArcSpan / daysInMonth;
+
+      const isCurrentMonth = today.year === year && today.month === month;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = createLocalDate(year, month, day);
+        const dayOfWeek = getWeekday(date);
+        const isToday = isCurrentMonth && today.day === day;
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+        const dayStartAngle = startAngle + (day - 1) * dayArcSpan;
+        const dayEndAngle = dayStartAngle + dayArcSpan - 0.002;
+
+        const entries = this.config.service.getEntriesForDate(date);
+
+        const path = this.createArcPath(YEAR_RING_INNER, YEAR_RING_OUTER, dayStartAngle, dayEndAngle);
+        const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        arc.setAttribute('d', path);
+
+        const classes = ['rc-day-arc'];
+        if (isToday) classes.push('rc-day-arc--today');
+        if (isWeekend) classes.push('rc-day-arc--weekend');
+        if (entries.length > 0) classes.push('rc-day-arc--has-notes');
+
+        arc.setAttribute('class', classes.join(' '));
+
+        arc.addEventListener('click', async () => {
+          await this.config?.service.openDailyNote(date);
+        });
+
+        arc.addEventListener('mouseenter', (e) => {
+          this.showTooltip(e, date, entries);
+        });
+        arc.addEventListener('mouseleave', () => this.hideTooltip());
+
+        svg.appendChild(arc);
+      }
+    }
+
+    // Month separators on year ring
+    for (let month = 1; month <= 12; month++) {
+      const angle = this.monthToAngle(month) - Math.PI / 2;
+      const x1 = CENTER + YEAR_RING_INNER * Math.cos(angle);
+      const y1 = CENTER + YEAR_RING_INNER * Math.sin(angle);
+      const x2 = CENTER + YEAR_RING_OUTER * Math.cos(angle);
+      const y2 = CENTER + YEAR_RING_OUTER * Math.sin(angle);
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', String(x1));
+      line.setAttribute('y1', String(y1));
+      line.setAttribute('x2', String(x2));
+      line.setAttribute('y2', String(y2));
+      line.setAttribute('class', 'rc-month-separator');
+      svg.appendChild(line);
+    }
+
+    // Month labels inside year ring
+    for (let month = 0; month < 12; month++) {
+      const angle = this.monthToAngle(month + 1) + (Math.PI / 12) - Math.PI / 2;
+      const labelRadius = YEAR_RING_INNER - 15;
+      const x = CENTER + labelRadius * Math.cos(angle);
+      const y = CENTER + labelRadius * Math.sin(angle);
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', String(x));
+      text.setAttribute('y', String(y));
+      text.setAttribute('class', 'rc-month-label');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.textContent = MONTH_NAMES[month];
+      svg.appendChild(text);
+    }
+  }
+
+  /**
+   * Renders life acts as colored arcs on the life ring
+   */
+  private renderLifeActsOnRing(svg: SVGSVGElement, birthYear: number, lifespan: number): void {
+    if (!this.config) return;
+
+    const lifeActs = this.config.settings.lifeActs;
+    if (lifeActs.length === 0) return;
+
+    for (const act of lifeActs) {
+      const startAngle = (act.startAge / lifespan) * 2 * Math.PI;
+      const endAngle = (act.endAge / lifespan) * 2 * Math.PI - 0.01;
+
+      // Render as a thinner arc outside the life ring
+      const path = this.createArcPath(LIFE_RING_OUTER + 2, LIFE_RING_OUTER + 8, startAngle, endAngle);
+      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arc.setAttribute('d', path);
+      arc.setAttribute('class', 'rc-life-act');
+
+      if (act.color) {
+        arc.style.fill = RING_COLORS[act.color];
+      }
+
+      svg.appendChild(arc);
+
+      // Label
+      const midAngle = (startAngle + endAngle) / 2 - Math.PI / 2;
+      const labelRadius = LIFE_RING_OUTER + 18;
+      const x = CENTER + labelRadius * Math.cos(midAngle);
+      const y = CENTER + labelRadius * Math.sin(midAngle);
+
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', String(x));
+      label.setAttribute('y', String(y));
+      label.setAttribute('class', 'rc-life-act-label');
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('dominant-baseline', 'central');
+
+      // Rotate for readability
+      const rotationDeg = (midAngle + Math.PI / 2) * 180 / Math.PI;
+      const adjustedRotation = rotationDeg > 90 && rotationDeg < 270 ? rotationDeg + 180 : rotationDeg;
+      label.setAttribute('transform', `rotate(${adjustedRotation}, ${x}, ${y})`);
+
+      if (act.color) {
+        label.style.fill = RING_COLORS[act.color];
+      }
+
+      label.textContent = act.label;
+      svg.appendChild(label);
+    }
+  }
+
+  /**
+   * Renders position marker on life ring
+   */
+  private renderLifePositionMarker(
+    svg: SVGSVGElement,
+    birthYear: number,
+    lifespan: number,
+    year: number,
+    type: 'today' | 'viewed'
+  ): void {
+    const age = year - birthYear;
+    const angle = (age / lifespan) * 2 * Math.PI - Math.PI / 2;
+
+    const innerR = LIFE_RING_INNER - 5;
+    const outerR = LIFE_RING_OUTER + 5;
+
+    const x1 = CENTER + innerR * Math.cos(angle);
+    const y1 = CENTER + innerR * Math.sin(angle);
+    const x2 = CENTER + outerR * Math.cos(angle);
+    const y2 = CENTER + outerR * Math.sin(angle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', type === 'today' ? 'rc-life-marker--today' : 'rc-life-marker--viewed');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Renders today marker on year ring
+   */
+  private renderTodayMarkerOnYearRing(svg: SVGSVGElement): void {
+    const today = getToday();
+    const daysInMonth = getDaysInMonth(today.year, today.month);
+    const startAngle = this.monthToAngle(today.month);
+    const monthArcSpan = Math.PI / 6;
+    const dayArcSpan = monthArcSpan / daysInMonth;
+    const todayAngle = startAngle + (today.day - 0.5) * dayArcSpan - Math.PI / 2;
+
+    const x1 = CENTER + (YEAR_RING_INNER - 5) * Math.cos(todayAngle);
+    const y1 = CENTER + (YEAR_RING_INNER - 5) * Math.sin(todayAngle);
+    const x2 = CENTER + (YEAR_RING_OUTER + 5) * Math.cos(todayAngle);
+    const y2 = CENTER + (YEAR_RING_OUTER + 5) * Math.sin(todayAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-today-marker');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Renders center display for nested clock
+   */
+  private renderNestedCenter(svg: SVGSVGElement, year: number, currentAge: number): void {
+    // Center circle
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', String(CENTER));
+    circle.setAttribute('cy', String(CENTER));
+    circle.setAttribute('r', String(CENTER_RADIUS - 10));
+    circle.setAttribute('class', 'rc-center');
+    svg.appendChild(circle);
+
+    // Year text
+    const yearText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yearText.setAttribute('x', String(CENTER));
+    yearText.setAttribute('y', String(CENTER - 20));
+    yearText.setAttribute('class', 'rc-center-year');
+    yearText.setAttribute('text-anchor', 'middle');
+    yearText.setAttribute('dominant-baseline', 'central');
+    yearText.textContent = String(year);
+    svg.appendChild(yearText);
+
+    // Age text
+    const ageText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    ageText.setAttribute('x', String(CENTER));
+    ageText.setAttribute('y', String(CENTER + 20));
+    ageText.setAttribute('class', 'rc-center-age');
+    ageText.setAttribute('text-anchor', 'middle');
+    ageText.setAttribute('dominant-baseline', 'central');
+    ageText.textContent = `${currentAge} Jahre`;
+    svg.appendChild(ageText);
+  }
+
+  /**
+   * Shows tooltip for life year hover
+   */
+  private showLifeYearTooltip(event: MouseEvent, year: number, age: number): void {
+    if (!this.tooltipEl) return;
+
+    const content = `<div class="rc-tooltip-date">${year}</div>
+      <div class="rc-tooltip-note">Alter: ${age} Jahre</div>`;
+
+    this.tooltipEl.innerHTML = content;
+    this.tooltipEl.style.display = 'block';
+
+    const rect = this.containerEl_?.getBoundingClientRect();
+    if (rect) {
+      const x = event.clientX - rect.left + 10;
+      const y = event.clientY - rect.top + 10;
+      this.tooltipEl.style.left = `${x}px`;
+      this.tooltipEl.style.top = `${y}px`;
+    }
+  }
+
+  /**
+   * Renders the annual view (original view)
+   */
+  private renderAnnualView(svg: SVGSVGElement, year: number): void {
     // Background circle
     this.renderBackgroundCircle(svg);
 
@@ -256,8 +636,6 @@ export class RadialCalendarView extends ItemView {
 
     // Render today marker
     this.renderTodayMarker(svg, year);
-
-    wrapper.appendChild(svg);
   }
 
   /**
