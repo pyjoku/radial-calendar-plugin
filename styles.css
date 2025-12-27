@@ -411,7 +411,7 @@
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
-/* Anniversary Dots (outer ring for recurring events) */
+/* Anniversary Dots (legacy - outer ring for recurring events) */
 .rc-anniversary-dot {
   fill: #ef4444;
   cursor: pointer;
@@ -420,6 +420,19 @@
 
 .rc-anniversary-dot:hover {
   filter: drop-shadow(0 0 6px #ef4444) brightness(1.2);
+}
+
+/* Anniversary Indicator (thin arc at outer edge of day ring) */
+.rc-anniversary-indicator {
+  fill: #ef4444;
+  fill-opacity: 0.85;
+  cursor: pointer;
+  transition: fill-opacity 0.15s ease, filter 0.15s ease;
+}
+
+.rc-anniversary-indicator:hover {
+  fill-opacity: 1;
+  filter: brightness(1.2);
 }
 
 /* Center Display for Nested Clock */

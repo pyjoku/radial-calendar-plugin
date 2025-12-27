@@ -1017,8 +1017,8 @@ export class RadialCalendarView extends ItemView {
     // Render outer segments (ticks with labels)
     this.renderOuterSegments(svg, year);
 
-    // Render anniversary ring (red dots for recurring events)
-    this.renderAnniversaryRing(svg, year);
+    // Note: Anniversary indicators are now rendered as part of day arcs (10% outer edge)
+    // See renderRingDayArc() and renderAnniversaryIndicator()
 
     // Render center with year
     this.renderCenter(svg, year);
@@ -1470,8 +1470,17 @@ export class RadialCalendarView extends ItemView {
   ): void {
     if (!this.config) return;
 
-    // Create arc path
-    const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+    // Calculate anniversary indicator height (10% of ring width)
+    const ringWidth = radii.outerRadius - radii.innerRadius;
+    const anniversaryHeight = ringWidth * 0.1;
+    const mainArcOuterRadius = radii.outerRadius - anniversaryHeight;
+
+    // Check for anniversary entries on this date
+    const anniversaryEntries = this.config.service.getAnniversaryEntriesForDate(date);
+    const hasAnniversary = anniversaryEntries.length > 0;
+
+    // Create main day arc path (leaving space for anniversary indicator)
+    const path = this.createArcPath(radii.innerRadius, mainArcOuterRadius, startAngle, endAngle);
 
     const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     arc.setAttribute('d', path);
@@ -1521,42 +1530,87 @@ export class RadialCalendarView extends ItemView {
 
     svg.appendChild(arc);
 
-    // Render note indicators as smaller arcs if there are entries
-    if (entries.length > 0) {
-      this.renderRingNoteIndicators(svg, startAngle, endAngle, entries, radii, ringColor);
+    // Render anniversary indicator at outer edge (10% of ring width)
+    if (hasAnniversary) {
+      this.renderAnniversaryIndicator(
+        svg,
+        startAngle,
+        endAngle,
+        mainArcOuterRadius,
+        radii.outerRadius,
+        anniversaryEntries,
+        date
+      );
     }
   }
 
   /**
-   * Renders note indicators for a specific ring
+   * Renders anniversary indicator as a thin arc at the outer edge of the day ring
    */
-  private renderRingNoteIndicators(
+  private renderAnniversaryIndicator(
     svg: SVGSVGElement,
     startAngle: number,
     endAngle: number,
+    innerRadius: number,
+    outerRadius: number,
     entries: readonly CalendarEntry[],
-    radii: RingRadii,
-    ringColor: string
+    date: LocalDate
   ): void {
-    const indicatorWidth = Math.min(10, (radii.outerRadius - radii.innerRadius) * 0.3);
-    const indicatorInnerR = radii.outerRadius - indicatorWidth;
-    const indicatorOuterR = radii.outerRadius - 2;
+    if (!this.config) return;
 
-    // Show up to 3 note indicators
-    const maxIndicators = Math.min(entries.length, 3);
-    const indicatorSpan = (endAngle - startAngle) / maxIndicators;
+    const path = this.createArcPath(innerRadius, outerRadius, startAngle, endAngle);
+    const indicator = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    indicator.setAttribute('d', path);
+    indicator.setAttribute('class', 'rc-anniversary-indicator');
 
-    for (let i = 0; i < maxIndicators; i++) {
-      const indStart = startAngle + i * indicatorSpan + 0.001;
-      const indEnd = indStart + indicatorSpan - 0.002;
+    // Click handler - open first entry or show menu
+    indicator.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (entries.length === 1) {
+        this.config?.openFile(entries[0].filePath);
+      } else if (entries.length > 1) {
+        this.showAnniversaryMenu(e as MouseEvent, entries);
+      }
+    });
 
-      const path = this.createArcPath(indicatorInnerR, indicatorOuterR, indStart, indEnd);
-      const indicator = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      indicator.setAttribute('d', path);
-      indicator.setAttribute('class', 'rc-note-indicator');
-      indicator.style.fill = ringColor;
-      svg.appendChild(indicator);
+    // Tooltip on hover
+    indicator.addEventListener('mouseenter', (e) => {
+      this.showAnniversaryTooltip(e as MouseEvent, entries);
+    });
+
+    indicator.addEventListener('mouseleave', () => {
+      this.hideTooltip();
+    });
+
+    svg.appendChild(indicator);
+  }
+
+  /**
+   * Shows menu for selecting anniversary entries
+   */
+  private showAnniversaryMenu(event: MouseEvent, entries: readonly CalendarEntry[]): void {
+    if (!this.config) return;
+
+    const menu = new Menu();
+
+    for (const entry of entries.slice(0, 15)) {
+      menu.addItem((item) => {
+        item
+          .setTitle(entry.displayName)
+          .setIcon('cake')
+          .onClick(() => {
+            this.config?.openFile(entry.filePath);
+          });
+      });
     }
+
+    if (entries.length > 15) {
+      menu.addItem((item) => {
+        item.setTitle(`+${entries.length - 15} more...`).setDisabled(true);
+      });
+    }
+
+    menu.showAtMouseEvent(event);
   }
 
   /**
