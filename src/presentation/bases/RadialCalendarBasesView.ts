@@ -52,12 +52,18 @@ export class RadialCalendarBasesView extends BasesView {
     super(controller);
     this.containerEl = containerEl;
     this.currentYear = new Date().getFullYear();
+    console.log('Radial Calendar Bases: View constructed');
   }
 
   /**
    * Called when data is updated - re-render the calendar
    */
   onDataUpdated(): void {
+    console.log('Radial Calendar Bases: onDataUpdated called');
+    console.log('Radial Calendar Bases: this.data =', this.data);
+    console.log('Radial Calendar Bases: this.data.data =', this.data?.data);
+    console.log('Radial Calendar Bases: entries count =', this.data?.data?.length ?? 0);
+
     // Get config values
     this.dateProperty = String(this.config.get('dateProperty') ?? 'date');
     this.color = String(this.config.get('color') ?? 'blue');
@@ -65,6 +71,10 @@ export class RadialCalendarBasesView extends BasesView {
     if (yearConfig && typeof yearConfig === 'number') {
       this.currentYear = yearConfig;
     }
+
+    console.log('Radial Calendar Bases: dateProperty =', this.dateProperty);
+    console.log('Radial Calendar Bases: color =', this.color);
+    console.log('Radial Calendar Bases: year =', this.currentYear);
 
     // Clear and re-render
     this.containerEl.empty();
@@ -191,13 +201,36 @@ export class RadialCalendarBasesView extends BasesView {
     const entries = this.data.data;
     const entriesByDay = new Map<number, BasesEntry[]>();
 
+    // Debug: Log first few entries to see date format
+    if (entries.length > 0) {
+      console.log('Radial Calendar Bases: Processing', entries.length, 'entries for year', this.currentYear);
+      const sample = entries[0];
+      console.log('Radial Calendar Bases: Sample entry file:', sample.file?.basename);
+      console.log('Radial Calendar Bases: Sample getValue("date"):', sample.getValue(this.dateProperty));
+      console.log('Radial Calendar Bases: Sample getValue("created"):', sample.getValue('created'));
+    }
+
+    let noDateCount = 0;
+    let wrongYearCount = 0;
+    const yearCounts = new Map<number, number>();
+
     // Group entries by day of year
     for (const entry of entries) {
       const date = this.getEntryDate(entry);
-      if (!date) continue;
+      if (!date) {
+        noDateCount++;
+        continue;
+      }
+
+      // Track years for debugging
+      const entryYear = date.getFullYear();
+      yearCounts.set(entryYear, (yearCounts.get(entryYear) || 0) + 1);
 
       // Check if date is in current year
-      if (date.getFullYear() !== this.currentYear) continue;
+      if (entryYear !== this.currentYear) {
+        wrongYearCount++;
+        continue;
+      }
 
       const dayOfYear = this.getDayOfYear(date);
       if (!entriesByDay.has(dayOfYear)) {
@@ -205,6 +238,11 @@ export class RadialCalendarBasesView extends BasesView {
       }
       entriesByDay.get(dayOfYear)!.push(entry);
     }
+
+    // Debug output
+    console.log('Radial Calendar Bases: No date:', noDateCount, 'Wrong year:', wrongYearCount);
+    console.log('Radial Calendar Bases: Entries by year:', Object.fromEntries(yearCounts));
+    console.log('Radial Calendar Bases: Days with entries in', this.currentYear + ':', entriesByDay.size);
 
     // Render indicators
     const color = RING_COLORS[this.color] || RING_COLORS.blue;
@@ -251,26 +289,46 @@ export class RadialCalendarBasesView extends BasesView {
     // Already a Date
     if (value instanceof Date) return value;
 
+    // Luxon DateTime (from Dataview/Bases) - has toJSDate() method
+    if (typeof value === 'object' && value !== null) {
+      const obj = value as Record<string, unknown>;
+
+      // Luxon DateTime
+      if (typeof obj.toJSDate === 'function') {
+        return (obj.toJSDate as () => Date)();
+      }
+
+      // Luxon DateTime alternative - has ts (timestamp) property
+      if (typeof obj.ts === 'number') {
+        return new Date(obj.ts);
+      }
+
+      // Object with value property (Bases Value type)
+      if ('value' in obj) {
+        return this.parseDate(obj.value);
+      }
+
+      // Object with path property (Dataview Link) - skip
+      if ('path' in obj) {
+        return null;
+      }
+    }
+
     // String date
     if (typeof value === 'string') {
-      const parsed = new Date(value);
-      if (!isNaN(parsed.getTime())) return parsed;
-
-      // Try YYYY-MM-DD format
+      // Try YYYY-MM-DD format first (most reliable)
       const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (match) {
         return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
       }
+
+      const parsed = new Date(value);
+      if (!isNaN(parsed.getTime())) return parsed;
     }
 
     // Number (timestamp)
     if (typeof value === 'number') {
       return new Date(value);
-    }
-
-    // Object with value property (Bases Value type)
-    if (typeof value === 'object' && value !== null && 'value' in value) {
-      return this.parseDate((value as { value: unknown }).value);
     }
 
     return null;
