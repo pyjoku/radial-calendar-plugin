@@ -49,8 +49,8 @@ const CENTER_RADIUS = 140;
 
 // Annual View Layout (single year focus)
 const OUTER_RADIUS = 380;
-const INNER_RADIUS = 120;
-const MONTH_LABEL_RADIUS = 100;
+const INNER_RADIUS = 145;  // More space for month labels
+const MONTH_LABEL_RADIUS = 115;
 
 // Shared constants
 const DAY_RING_WIDTH = (OUTER_RADIUS - INNER_RADIUS) / 31;
@@ -473,44 +473,73 @@ export class RadialCalendarView extends ItemView {
    */
   private renderLifePhaseArcWithRadii(
     svg: SVGSVGElement,
-    defs: SVGDefsElement,
+    _defs: SVGDefsElement,
     phase: PhaseWithTrack,
     radii: { inner: number; outer: number }
   ): void {
-    // Create arc path
-    const path = this.createArcPath(radii.inner, radii.outer, phase.startAngle, phase.endAngle);
+    // For ongoing phases, render two separate arcs: solid until today, then faded
+    if (phase.isOngoing && phase.todayAngle !== undefined && phase.todayAngle > phase.startAngle) {
+      // Arc 1: Start to Today (full color)
+      const pathSolid = this.createArcPath(radii.inner, radii.outer, phase.startAngle, phase.todayAngle);
+      const arcSolid = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arcSolid.setAttribute('d', pathSolid);
+      arcSolid.setAttribute('class', 'rc-life-phase');
+      arcSolid.style.fill = phase.color;
+      arcSolid.style.opacity = '1';
 
-    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    arc.setAttribute('d', path);
-    arc.setAttribute('class', 'rc-life-phase');
+      // Arc 2: Today to End (50% opacity)
+      const pathFaded = this.createArcPath(radii.inner, radii.outer, phase.todayAngle, phase.endAngle);
+      const arcFaded = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arcFaded.setAttribute('d', pathFaded);
+      arcFaded.setAttribute('class', 'rc-life-phase rc-life-phase-future');
+      arcFaded.style.fill = phase.color;
+      arcFaded.style.opacity = '0.35';
 
-    // Apply color or gradient
-    if (phase.isOngoing && phase.todayAngle !== undefined) {
-      // Create gradient for ongoing phase
-      const gradientId = `phase-gradient-${phase.id.replace(/[^a-zA-Z0-9]/g, '-')}`;
-      this.createPhaseGradient(defs, gradientId, phase);
-      arc.style.fill = `url(#${gradientId})`;
+      // Click handler for both arcs
+      if (phase.filePath) {
+        arcSolid.style.cursor = 'pointer';
+        arcFaded.style.cursor = 'pointer';
+        const openFile = () => this.config?.openFile(phase.filePath!);
+        arcSolid.addEventListener('click', openFile);
+        arcFaded.addEventListener('click', openFile);
+      }
+
+      // Hover tooltip for both arcs
+      const showTooltip = (e: MouseEvent) => this.showPhaseTooltip(e, phase);
+      const hideTooltip = () => this.hideTooltip();
+      arcSolid.addEventListener('mouseenter', showTooltip);
+      arcSolid.addEventListener('mouseleave', hideTooltip);
+      arcFaded.addEventListener('mouseenter', showTooltip);
+      arcFaded.addEventListener('mouseleave', hideTooltip);
+
+      svg.appendChild(arcSolid);
+      svg.appendChild(arcFaded);
     } else {
+      // Non-ongoing phase: single arc with full color
+      const path = this.createArcPath(radii.inner, radii.outer, phase.startAngle, phase.endAngle);
+      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arc.setAttribute('d', path);
+      arc.setAttribute('class', 'rc-life-phase');
       arc.style.fill = phase.color;
-    }
 
-    // Click handler to open phase file
-    if (phase.filePath) {
-      arc.style.cursor = 'pointer';
-      arc.addEventListener('click', () => {
-        this.config?.openFile(phase.filePath!);
+      // Click handler to open phase file
+      if (phase.filePath) {
+        arc.style.cursor = 'pointer';
+        arc.addEventListener('click', () => {
+          this.config?.openFile(phase.filePath!);
+        });
+      }
+
+      // Hover tooltip
+      arc.addEventListener('mouseenter', (e) => {
+        this.showPhaseTooltip(e, phase);
       });
+      arc.addEventListener('mouseleave', () => this.hideTooltip());
+
+      svg.appendChild(arc);
     }
 
-    // Hover tooltip
-    arc.addEventListener('mouseenter', (e) => {
-      this.showPhaseTooltip(e, phase);
-    });
-    arc.addEventListener('mouseleave', () => this.hideTooltip());
-
-    svg.appendChild(arc);
-
-    // Render label if space permits
+    // Render label if space permits (use full arc span for positioning)
     if (phase.label && (phase.endAngle - phase.startAngle) > 0.15) {
       this.renderPhaseLabel(svg, phase, radii);
     }
