@@ -4,7 +4,7 @@
  * Handles parsing, rendering, and live updates for radcal codeblocks
  */
 
-import { MarkdownRenderChild, MarkdownPostProcessorContext, App, TFile } from 'obsidian';
+import { MarkdownRenderChild, MarkdownPostProcessorContext, App, TFile, Menu } from 'obsidian';
 import type { CalendarService } from '../../application/services/CalendarService';
 import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
@@ -64,7 +64,7 @@ class RadcalRenderChild extends MarkdownRenderChild {
       this.config,
       entries,
       year,
-      (date, dayEntries) => this.handleDayClick(date, dayEntries)
+      (event, date, dayEntries) => this.handleDayClick(event, date, dayEntries)
     );
 
     // Add tooltip element
@@ -230,14 +230,49 @@ class RadcalRenderChild extends MarkdownRenderChild {
     return null;
   }
 
-  private handleDayClick(date: LocalDate, entries: CalendarEntry[]): void {
+  private handleDayClick(event: MouseEvent, date: LocalDate, entries: CalendarEntry[]): void {
     if (entries.length === 1) {
       // Open single entry directly
       this.openFile(entries[0].filePath);
     } else if (entries.length > 1) {
-      // Open first entry (could add menu later)
-      this.openFile(entries[0].filePath);
+      // Show menu for multiple entries
+      this.showEntryMenu(event, date, entries);
     }
+  }
+
+  private showEntryMenu(event: MouseEvent, date: LocalDate, entries: CalendarEntry[]): void {
+    const menu = new Menu();
+
+    // Add header with date
+    const dateStr = `${date.day}.${date.month}.${date.year}`;
+    menu.addItem((item) => {
+      item
+        .setTitle(dateStr)
+        .setIcon('calendar')
+        .setDisabled(true);
+    });
+
+    menu.addSeparator();
+
+    // Add entry for each note (up to 15)
+    for (const entry of entries.slice(0, 15)) {
+      menu.addItem((item) => {
+        item
+          .setTitle(entry.displayName)
+          .setIcon('file-text')
+          .onClick(() => {
+            this.openFile(entry.filePath);
+          });
+      });
+    }
+
+    if (entries.length > 15) {
+      menu.addItem((item) => {
+        item.setTitle(`+${entries.length - 15} more...`).setDisabled(true);
+      });
+    }
+
+    menu.showAtMouseEvent(event);
   }
 
   private setupTooltips(svg: SVGSVGElement, tooltipEl: HTMLElement, year: number): void {

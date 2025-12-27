@@ -45,7 +45,7 @@ export class RadcalRenderer {
     config: RadcalBlockConfig,
     entries: EntriesByDate,
     year: number,
-    onDayClick?: (date: LocalDate, entries: CalendarEntry[]) => void
+    onDayClick?: (event: MouseEvent, date: LocalDate, entries: CalendarEntry[]) => void
   ): SVGSVGElement {
     const svg = this.createSVG();
 
@@ -146,7 +146,7 @@ export class RadcalRenderer {
     radii: RingRadii,
     color: string,
     folderFilter?: string,
-    onDayClick?: (date: LocalDate, entries: CalendarEntry[]) => void
+    onDayClick?: (event: MouseEvent, date: LocalDate, entries: CalendarEntry[]) => void
   ): void {
     for (let month = 1; month <= 12; month++) {
       const daysInMonth = getDaysInMonth(year, month);
@@ -188,7 +188,7 @@ export class RadcalRenderer {
           if (onDayClick) {
             const clickDate = date;
             const clickEntries = dayEntries;
-            arc.addEventListener('click', () => onDayClick(clickDate, clickEntries));
+            arc.addEventListener('click', (e) => onDayClick(e as MouseEvent, clickDate, clickEntries));
           }
         }
 
