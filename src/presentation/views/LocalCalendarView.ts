@@ -5,13 +5,15 @@
  * sits in the life cycle and year cycle.
  */
 
-import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Menu } from 'obsidian';
 import type { CalendarService } from '../../application/services/CalendarService';
 import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { RadialCalendarSettings } from '../../core/domain/types';
 import { RING_COLORS } from '../../core/domain/types';
 import { getToday, createLocalDate, getDaysInMonth, getWeekday } from '../../core/domain/models/LocalDate';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
+
+const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 export const VIEW_TYPE_LOCAL_CALENDAR = 'local-calendar-view';
 
@@ -28,6 +30,7 @@ export interface LocalCalendarViewConfig {
   service: CalendarService;
   settings: RadialCalendarSettings;
   getActiveFileDate: () => LocalDate | null;
+  openFile: (path: string) => Promise<void>;
 }
 
 export class LocalCalendarView extends ItemView {
@@ -238,6 +241,19 @@ export class LocalCalendarView extends ItemView {
         if (entries.length > 2) classes.push('lc-day--many-notes');
 
         arc.setAttribute('class', classes.join(' '));
+        arc.style.cursor = 'pointer';
+
+        // Click handler - show notes or create new
+        arc.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (entries.length > 0) {
+            this.showDayContextMenu(e as MouseEvent, date, entries);
+          } else {
+            this.config?.service.openDailyNote(date);
+          }
+        });
+
         svg.appendChild(arc);
       }
     }
@@ -362,6 +378,56 @@ export class LocalCalendarView extends ItemView {
     line.setAttribute('y2', String(y2));
     line.setAttribute('class', className);
     svg.appendChild(line);
+  }
+
+  private showDayContextMenu(event: MouseEvent, date: LocalDate, entries: readonly CalendarEntry[]): void {
+    if (!this.config) return;
+
+    const menu = new Menu();
+
+    // Add header with date
+    menu.addItem((item) => {
+      item
+        .setTitle(`${date.day}. ${MONTH_NAMES[date.month - 1]} ${date.year}`)
+        .setIcon('calendar')
+        .setDisabled(true);
+    });
+
+    menu.addSeparator();
+
+    // Add entry for creating new note
+    menu.addItem((item) => {
+      item
+        .setTitle('Neue Notiz erstellen')
+        .setIcon('plus')
+        .onClick(async () => {
+          await this.config?.service.openDailyNote(date);
+        });
+    });
+
+    if (entries.length > 0) {
+      menu.addSeparator();
+
+      // Add entries (max 10)
+      for (const entry of entries.slice(0, 10)) {
+        menu.addItem((item) => {
+          item
+            .setTitle(entry.displayName)
+            .setIcon('file')
+            .onClick(async () => {
+              await this.config?.openFile(entry.filePath);
+            });
+        });
+      }
+
+      if (entries.length > 10) {
+        menu.addItem((item) => {
+          item.setTitle(`+${entries.length - 10} weitere...`).setDisabled(true);
+        });
+      }
+    }
+
+    menu.showAtMouseEvent(event);
   }
 
   private createArcPath(innerR: number, outerR: number, startAngle: number, endAngle: number): string {

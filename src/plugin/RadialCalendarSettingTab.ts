@@ -55,6 +55,9 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
       this.createLifeViewSection(containerEl);
     }
 
+    // Daily Notes Section
+    this.createDailyNotesSection(containerEl);
+
     // Ring Configuration Section
     this.createRingConfigSection(containerEl);
 
@@ -125,6 +128,71 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
               await this.plugin.saveSettings();
             }
           });
+      });
+  }
+
+  /**
+   * Creates the daily notes section
+   */
+  private createDailyNotesSection(containerEl: HTMLElement): void {
+    containerEl.createEl('h3', { text: 'Tägliche Notizen' });
+
+    new Setting(containerEl)
+      .setName('Notizen-Ordner')
+      .setDesc('Ordner, in dem neue Notizen erstellt werden (leer = Root)')
+      .addText((text) => {
+        text
+          .setPlaceholder('z.B. Daily Notes')
+          .setValue(this.plugin.settings.dailyNoteFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.dailyNoteFolder = value;
+            await this.plugin.saveSettings();
+          });
+        new FolderSuggest(this.app, text.inputEl);
+      });
+
+    new Setting(containerEl)
+      .setName('Filter-Ordner')
+      .setDesc('Nur Notizen aus diesem Ordner anzeigen (leer = alle)')
+      .addText((text) => {
+        text
+          .setPlaceholder('z.B. Journal')
+          .setValue(this.plugin.settings.calendarFilterFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.calendarFilterFolder = value;
+            await this.plugin.saveSettings();
+          });
+        new FolderSuggest(this.app, text.inputEl);
+      });
+
+    new Setting(containerEl)
+      .setName('Dateiname-Format')
+      .setDesc('Format für neue Notizen (YYYY-MM-DD)')
+      .addText((text) => {
+        text
+          .setPlaceholder('YYYY-MM-DD')
+          .setValue(this.plugin.settings.periodicNotesFormat.daily)
+          .onChange(async (value) => {
+            this.plugin.settings.periodicNotesFormat = {
+              ...this.plugin.settings.periodicNotesFormat,
+              daily: value || 'YYYY-MM-DD',
+            };
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Jährlich wiederkehrend')
+      .setDesc('Ordner für Geburtstage, Jahrestage (z.B. 27.03.1977 wird jedes Jahr am 27.03. angezeigt)')
+      .addText((text) => {
+        text
+          .setPlaceholder('z.B. Geburtstage')
+          .setValue(this.plugin.settings.annualRecurringFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.annualRecurringFolder = value;
+            await this.plugin.saveSettings();
+          });
+        new FolderSuggest(this.app, text.inputEl);
       });
   }
 

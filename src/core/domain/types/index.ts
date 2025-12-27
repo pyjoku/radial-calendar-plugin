@@ -529,7 +529,18 @@ export interface RadialCalendarSettings {
   /** Template folder for generated templates */
   templateFolder: string;
 
-  // ======== Outer Segments (new) ========
+  // ======== Daily Notes ========
+
+  /** Folder for daily notes (where new notes are created) */
+  dailyNoteFolder: string;
+
+  /** Folder filter for which files to show in calendar */
+  calendarFilterFolder: string;
+
+  /** Folder for annual recurring notes (birthdays, anniversaries) */
+  annualRecurringFolder: string;
+
+  // ======== Outer Segments ========
 
   /** Annual view segment type */
   annualSegmentType: AnnualSegmentType;
@@ -701,6 +712,10 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
     daily: 'YYYY-MM-DD',
   },
   templateFolder: 'Templates',
+  // Daily notes
+  dailyNoteFolder: '',
+  calendarFilterFolder: '',
+  annualRecurringFolder: '',
   // Outer segments
   annualSegmentType: 'none',
   customSegments: [],

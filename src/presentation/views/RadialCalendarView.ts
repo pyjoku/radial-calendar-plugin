@@ -180,6 +180,16 @@ export class RadialCalendarView extends ItemView {
       this.config?.service.goToToday();
     });
 
+    // Refresh button
+    const refreshBtn = header.createEl('button', {
+      text: '\u21bb',
+      cls: 'rc-nav-btn rc-refresh-btn',
+      attr: { 'aria-label': 'Refresh view' },
+    });
+    refreshBtn.addEventListener('click', () => {
+      this.render();
+    });
+
     // View mode toggle
     this.renderViewModeToggle(header);
   }
