@@ -184,6 +184,23 @@ export class CalendarService {
   }
 
   /**
+   * Gets anniversary entries for a specific date (recurring yearly)
+   * @param date - The date to get anniversary entries for
+   * @returns Array of anniversary entries matching this month/day
+   */
+  getAnniversaryEntriesForDate(date: LocalDate): readonly CalendarEntry[] {
+    return this.entryCache.getAnniversaryEntriesForDate(date);
+  }
+
+  /**
+   * Gets all anniversary entries
+   * @returns Array of all anniversary entries
+   */
+  getAllAnniversaryEntries(): readonly CalendarEntry[] {
+    return this.entryCache.getAllAnniversaryEntries();
+  }
+
+  /**
    * Calculates bar positions for multi-day entries
    * TODO: Implement proper multi-day bar positioning
    */
@@ -646,6 +663,9 @@ export class CalendarService {
       }
     }
 
+    // Check for radcal-annual property (boolean) to mark as anniversary
+    const isAnniversary = frontmatter?.['radcal-annual'] === true;
+
     return createCalendarEntry({
       id: fileInfo.path,
       filePath: fileInfo.path,
@@ -658,6 +678,7 @@ export class CalendarService {
         folder: fileInfo.folderPath ?? '',
         properties,
       },
+      isAnniversary: isAnniversary || undefined,  // Only pass if true
     });
   }
 

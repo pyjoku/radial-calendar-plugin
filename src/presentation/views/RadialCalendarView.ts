@@ -64,6 +64,10 @@ const SEGMENT_TICK_INNER = OUTER_RADIUS + 2;
 const SEGMENT_TICK_OUTER = OUTER_RADIUS + 8;
 const SEGMENT_LABEL_RADIUS = OUTER_RADIUS + 14;
 
+// Anniversary ring constants
+const ANNIVERSARY_RING_RADIUS = OUTER_RADIUS + 25;  // Outside segment labels
+const ANNIVERSARY_DOT_RADIUS = 5;
+
 /**
  * Calculated radii for a ring
  */
@@ -1018,6 +1022,9 @@ export class RadialCalendarView extends ItemView {
     // Render outer segments (ticks with labels)
     this.renderOuterSegments(svg, year);
 
+    // Render anniversary ring (red dots for recurring events)
+    this.renderAnniversaryRing(svg, year);
+
     // Render center with year
     this.renderCenter(svg, year);
 
@@ -1038,6 +1045,86 @@ export class RadialCalendarView extends ItemView {
     circle.setAttribute('r', String(DATA_RING_INNER));
     circle.setAttribute('class', 'rc-label-ring-separator');
     svg.appendChild(circle);
+  }
+
+  /**
+   * Renders the anniversary ring with red dots for recurring events
+   */
+  private renderAnniversaryRing(svg: SVGSVGElement, year: number): void {
+    if (!this.config) return;
+
+    // Get all anniversary entries
+    const anniversaryEntries = this.config.service.getAllAnniversaryEntries();
+    if (anniversaryEntries.length === 0) return;
+
+    // Group entries by month-day
+    const entriesByMonthDay = new Map<string, typeof anniversaryEntries[number][]>();
+    for (const entry of anniversaryEntries) {
+      const key = `${String(entry.startDate.month).padStart(2, '0')}-${String(entry.startDate.day).padStart(2, '0')}`;
+      const existing = entriesByMonthDay.get(key) ?? [];
+      existing.push(entry);
+      entriesByMonthDay.set(key, existing);
+    }
+
+    // Render a dot for each unique month-day
+    for (const [monthDay, entries] of entriesByMonthDay) {
+      const [monthStr, dayStr] = monthDay.split('-');
+      const month = parseInt(monthStr, 10);
+      const day = parseInt(dayStr, 10);
+
+      // Calculate angle for this date
+      const daysInMonth = getDaysInMonth(year, month);
+      const startAngle = this.monthToAngle(month);
+      const monthArcSpan = Math.PI / 6;  // 30 degrees per month
+      const dayOffset = (day - 0.5) / daysInMonth;
+      const angle = startAngle + dayOffset * monthArcSpan;
+
+      // Calculate position
+      const x = CENTER + ANNIVERSARY_RING_RADIUS * Math.cos(angle - Math.PI / 2);
+      const y = CENTER + ANNIVERSARY_RING_RADIUS * Math.sin(angle - Math.PI / 2);
+
+      // Create dot element
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', String(x));
+      dot.setAttribute('cy', String(y));
+      dot.setAttribute('r', String(ANNIVERSARY_DOT_RADIUS));
+      dot.setAttribute('class', 'rc-anniversary-dot');
+
+      // Add tooltip and click handler
+      const firstEntry = entries[0];
+      dot.addEventListener('mouseenter', (e) => {
+        const names = entries.map(e => e.displayName).join(', ');
+        const dateStr = `${day}.${month}.`;
+        this.showAnniversaryTooltip(e as MouseEvent, names, dateStr, entries.length);
+      });
+      dot.addEventListener('mouseleave', () => this.hideTooltip());
+      dot.addEventListener('click', () => {
+        if (entries.length === 1) {
+          this.config?.openFile(firstEntry.filePath);
+        } else {
+          // For multiple entries, open the first one (could add a menu later)
+          this.config?.openFile(firstEntry.filePath);
+        }
+      });
+
+      svg.appendChild(dot);
+    }
+  }
+
+  /**
+   * Shows tooltip for anniversary dots
+   */
+  private showAnniversaryTooltip(event: MouseEvent, names: string, dateStr: string, count: number): void {
+    if (!this.tooltipEl) return;
+
+    const countText = count > 1 ? ` (+${count - 1} more)` : '';
+    const content = `<div class="rc-tooltip-date">📅 ${dateStr}</div>
+      <div class="rc-tooltip-note">${names}${countText}</div>`;
+
+    this.tooltipEl.innerHTML = content;
+    this.tooltipEl.style.display = 'block';
+    this.tooltipEl.style.left = `${event.pageX + 10}px`;
+    this.tooltipEl.style.top = `${event.pageY + 10}px`;
   }
 
   /**

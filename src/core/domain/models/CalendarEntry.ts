@@ -140,14 +140,16 @@ export function createCalendarEntry(params: {
   readonly startDate: LocalDate;
   readonly endDate: LocalDate | null;
   readonly metadata: EntryMetadata;
+  /** Optional override for anniversary status (from radcal-annual property) */
+  readonly isAnniversary?: boolean;
 }): CalendarEntry {
   const isMultiDay = params.endDate !== null &&
     (params.startDate.year !== params.endDate.year ||
      params.startDate.month !== params.endDate.month ||
      params.startDate.day !== params.endDate.day);
 
-  // Anniversary entries have year 0 (placeholder for recurring yearly events)
-  const isAnniversary = params.startDate.year === 0;
+  // Anniversary: either explicitly set via property, or year 0 (XXXX-MM-DD format)
+  const isAnniversary = params.isAnniversary ?? (params.startDate.year === 0);
 
   return Object.freeze({
     id: params.id,

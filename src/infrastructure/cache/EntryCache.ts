@@ -217,6 +217,28 @@ export class EntryCache {
   }
 
   /**
+   * Gets anniversary entries for a specific month/day (ignoring year)
+   * @param date - The date to query (only month and day are used)
+   * @returns Array of anniversary entries
+   */
+  getAnniversaryEntriesForDate(date: LocalDate): readonly CalendarEntry[] {
+    const monthDayKey = this.monthDayKey(date.month, date.day);
+    return this.anniversaryEntriesByMonthDay.get(monthDayKey) ?? [];
+  }
+
+  /**
+   * Gets all anniversary entries across all dates
+   * @returns Array of all anniversary entries
+   */
+  getAllAnniversaryEntries(): readonly CalendarEntry[] {
+    const entries: CalendarEntry[] = [];
+    for (const list of this.anniversaryEntriesByMonthDay.values()) {
+      entries.push(...list);
+    }
+    return entries;
+  }
+
+  /**
    * Gets an entry by file path
    * @param filePath - Path to look up
    * @returns The entry or undefined
