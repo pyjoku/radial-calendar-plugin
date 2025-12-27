@@ -52,18 +52,12 @@ export class RadialCalendarBasesView extends BasesView {
     super(controller);
     this.containerEl = containerEl;
     this.currentYear = new Date().getFullYear();
-    console.log('Radial Calendar Bases: View constructed');
   }
 
   /**
    * Called when data is updated - re-render the calendar
    */
   onDataUpdated(): void {
-    console.log('Radial Calendar Bases: onDataUpdated called');
-    console.log('Radial Calendar Bases: this.data =', this.data);
-    console.log('Radial Calendar Bases: this.data.data =', this.data?.data);
-    console.log('Radial Calendar Bases: entries count =', this.data?.data?.length ?? 0);
-
     // Get config values
     this.dateProperty = String(this.config.get('dateProperty') ?? 'date');
     this.color = String(this.config.get('color') ?? 'blue');
@@ -71,10 +65,6 @@ export class RadialCalendarBasesView extends BasesView {
     if (yearConfig && typeof yearConfig === 'number') {
       this.currentYear = yearConfig;
     }
-
-    console.log('Radial Calendar Bases: dateProperty =', this.dateProperty);
-    console.log('Radial Calendar Bases: color =', this.color);
-    console.log('Radial Calendar Bases: year =', this.currentYear);
 
     // Clear and re-render
     this.containerEl.empty();
@@ -201,36 +191,13 @@ export class RadialCalendarBasesView extends BasesView {
     const entries = this.data.data;
     const entriesByDay = new Map<number, BasesEntry[]>();
 
-    // Debug: Log first few entries to see date format
-    if (entries.length > 0) {
-      console.log('Radial Calendar Bases: Processing', entries.length, 'entries for year', this.currentYear);
-      const sample = entries[0];
-      console.log('Radial Calendar Bases: Sample entry file:', sample.file?.basename);
-      console.log('Radial Calendar Bases: Sample getValue("date"):', sample.getValue(this.dateProperty));
-      console.log('Radial Calendar Bases: Sample getValue("created"):', sample.getValue('created'));
-    }
-
-    let noDateCount = 0;
-    let wrongYearCount = 0;
-    const yearCounts = new Map<number, number>();
-
     // Group entries by day of year
     for (const entry of entries) {
       const date = this.getEntryDate(entry);
-      if (!date) {
-        noDateCount++;
-        continue;
-      }
-
-      // Track years for debugging
-      const entryYear = date.getFullYear();
-      yearCounts.set(entryYear, (yearCounts.get(entryYear) || 0) + 1);
+      if (!date) continue;
 
       // Check if date is in current year
-      if (entryYear !== this.currentYear) {
-        wrongYearCount++;
-        continue;
-      }
+      if (date.getFullYear() !== this.currentYear) continue;
 
       const dayOfYear = this.getDayOfYear(date);
       if (!entriesByDay.has(dayOfYear)) {
@@ -238,11 +205,6 @@ export class RadialCalendarBasesView extends BasesView {
       }
       entriesByDay.get(dayOfYear)!.push(entry);
     }
-
-    // Debug output
-    console.log('Radial Calendar Bases: No date:', noDateCount, 'Wrong year:', wrongYearCount);
-    console.log('Radial Calendar Bases: Entries by year:', Object.fromEntries(yearCounts));
-    console.log('Radial Calendar Bases: Days with entries in', this.currentYear + ':', entriesByDay.size);
 
     // Render indicators
     const color = RING_COLORS[this.color] || RING_COLORS.blue;
