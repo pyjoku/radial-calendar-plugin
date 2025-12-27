@@ -998,6 +998,8 @@ export class RadialCalendarView extends ItemView {
       const radii = ringRadiiMap.get(ring.order);
       if (radii) {
         this.renderRing(svg, year, ring, radii);
+        // Render separator circle at inner edge of this ring
+        this.renderRingSeparator(svg, radii.innerRadius);
       }
     }
 
@@ -1034,6 +1036,18 @@ export class RadialCalendarView extends ItemView {
     circle.setAttribute('cy', String(CENTER));
     circle.setAttribute('r', String(DATA_RING_INNER));
     circle.setAttribute('class', 'rc-label-ring-separator');
+    svg.appendChild(circle);
+  }
+
+  /**
+   * Renders a separator circle at a given radius to delineate rings
+   */
+  private renderRingSeparator(svg: SVGSVGElement, radius: number): void {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', String(CENTER));
+    circle.setAttribute('cy', String(CENTER));
+    circle.setAttribute('r', String(radius));
+    circle.setAttribute('class', 'rc-ring-separator');
     svg.appendChild(circle);
   }
 
