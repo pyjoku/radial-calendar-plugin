@@ -304,6 +304,193 @@ Phases without an end date are treated as "ongoing":
 - Gradient fade from today to expected lifespan end
 - Marked as "Active (ongoing)" in tooltip
 
+## Radcal Codeblock
+
+Embed filtered radial calendars directly in your notes using the `radcal` codeblock - similar to Dataview or Bases.
+
+### Basic Usage
+
+````markdown
+```radcal
+year: 2024
+```
+````
+
+This renders an interactive radial calendar for 2024 directly in your note.
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `year` | number | current year | Year to display |
+| `style` | string | `annual` | `annual` or `life` |
+| `filter` | string/yaml | - | Bases-compatible filter expression |
+| `dateProperty` | string | - | Frontmatter property to use as date source |
+| `folder` | string | - | Filter by folder (legacy, use `filter` instead) |
+| `folders` | list | - | Filter by multiple folders (legacy) |
+| `rings` | list | - | Multiple ring configuration |
+| `showLabels` | boolean | `true` | Show month labels |
+| `showToday` | boolean | `true` | Show today marker |
+| `showAnniversaries` | boolean | `false` | Show anniversary ring |
+| `segments` | string | `none` | `none`, `seasons`, `quarters`, `weeks` |
+| `birthYear` | number | - | For life view |
+| `lifespan` | number | - | For life view |
+
+### Filter Syntax (Bases-compatible)
+
+The filter syntax is compatible with Obsidian Bases:
+
+**By Tag:**
+````markdown
+```radcal
+filter: file.hasTag("project")
+```
+````
+
+**By Folder:**
+````markdown
+```radcal
+filter: file.inFolder("Work/Projects")
+```
+````
+
+**By Link:**
+````markdown
+```radcal
+filter: file.hasLink("MOC Dashboard")
+```
+````
+
+**Combined with AND/OR:**
+````markdown
+```radcal
+filter: file.hasTag("korea") && file.inFolder("trips")
+```
+````
+
+````markdown
+```radcal
+filter: file.hasTag("work") || file.hasTag("project")
+```
+````
+
+**Negation:**
+````markdown
+```radcal
+filter: !file.hasTag("archived")
+```
+````
+
+**YAML Filter Structure (for complex logic):**
+````markdown
+```radcal
+filter:
+  and:
+    - file.inFolder("Projects")
+    - file.hasTag("active")
+  not:
+    - file.hasTag("archived")
+```
+````
+
+**Nested Tags:** `file.hasTag("my")` matches `#my`, `#my/trips`, `#my/trips/korea`
+
+### Date Property
+
+Use `dateProperty` to position entries by a specific frontmatter property instead of the file's default date:
+
+````markdown
+```radcal
+filter: file.hasTag("person")
+dateProperty: Birthday
+```
+````
+
+This displays all notes tagged `#person` positioned by their `Birthday` frontmatter field.
+
+**Use cases:**
+- Birthday calendars from contact notes
+- Project deadlines
+- Publication dates
+- Any custom date field
+
+### Multiple Rings
+
+Display different folders as separate colored rings:
+
+````markdown
+```radcal
+rings:
+  - folder: "Work"
+    color: blue
+  - folder: "Personal"
+    color: green
+  - folder: "Health"
+    color: red
+```
+````
+
+**Available colors:** `red`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `teal`, `cyan`, `magenta`, `lime`, `amber`, `indigo`, `violet`, `rose`, `gray`, `slate`, `stone`
+
+### Examples
+
+**Simple Year View:**
+````markdown
+```radcal
+year: 2024
+showLabels: true
+showToday: true
+```
+````
+
+**Project Calendar:**
+````markdown
+```radcal
+filter: file.inFolder("Projects") && file.hasTag("active")
+segments: quarters
+```
+````
+
+**Birthday Calendar:**
+````markdown
+```radcal
+filter: file.hasTag("person")
+dateProperty: Birthday
+showToday: false
+```
+````
+
+**Multi-Ring Overview:**
+````markdown
+```radcal
+rings:
+  - folder: "Daily"
+    color: blue
+  - folder: "Events"
+    color: green
+  - folder: "Projects"
+    color: purple
+segments: seasons
+```
+````
+
+**Life View:**
+````markdown
+```radcal
+style: life
+birthYear: 1985
+lifespan: 85
+```
+````
+
+### Interactivity
+
+- **Click** on a day with entries to open the note
+- **Hover** over days to see tooltips with entry names
+- **Live updates** - calendar refreshes automatically when notes change
+
+---
+
 ## Local Calendar (Sidebar)
 
 A compact radial calendar that fits in the sidebar:
