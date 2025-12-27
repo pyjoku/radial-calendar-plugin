@@ -64,9 +64,9 @@ const SEGMENT_TICK_INNER = OUTER_RADIUS + 2;
 const SEGMENT_TICK_OUTER = OUTER_RADIUS + 8;
 const SEGMENT_LABEL_RADIUS = OUTER_RADIUS + 14;
 
-// Anniversary ring constants
-const ANNIVERSARY_RING_RADIUS = OUTER_RADIUS + 25;  // Outside segment labels
-const ANNIVERSARY_DOT_RADIUS = 5;
+// Anniversary ring constants (must fit within SVG viewBox)
+const ANNIVERSARY_RING_RADIUS = OUTER_RADIUS + 12;  // Between ticks and labels (392)
+const ANNIVERSARY_DOT_RADIUS = 4;
 
 /**
  * Calculated radii for a ring
@@ -1093,9 +1093,7 @@ export class RadialCalendarView extends ItemView {
       // Add tooltip and click handler
       const firstEntry = entries[0];
       dot.addEventListener('mouseenter', (e) => {
-        const names = entries.map(e => e.displayName).join(', ');
-        const dateStr = `${day}.${month}.`;
-        this.showAnniversaryTooltip(e as MouseEvent, names, dateStr, entries.length);
+        this.showAnniversaryTooltip(e as MouseEvent, entries);
       });
       dot.addEventListener('mouseleave', () => this.hideTooltip());
       dot.addEventListener('click', () => {
@@ -1114,17 +1112,38 @@ export class RadialCalendarView extends ItemView {
   /**
    * Shows tooltip for anniversary dots
    */
-  private showAnniversaryTooltip(event: MouseEvent, names: string, dateStr: string, count: number): void {
-    if (!this.tooltipEl) return;
+  private showAnniversaryTooltip(event: MouseEvent, entries: readonly CalendarEntry[]): void {
+    if (!this.tooltipEl || entries.length === 0) return;
 
-    const countText = count > 1 ? ` (+${count - 1} more)` : '';
-    const content = `<div class="rc-tooltip-date">📅 ${dateStr}</div>
-      <div class="rc-tooltip-note">${names}${countText}</div>`;
+    // Get the recurring date from the first entry
+    const firstEntry = entries[0];
+    const recurringDate = `${firstEntry.startDate.day}.${firstEntry.startDate.month}.`;
+
+    let content = `<div class="rc-tooltip-date">📅 ${recurringDate} (annual)</div>`;
+    content += '<div class="rc-tooltip-notes">';
+
+    for (const entry of entries.slice(0, 5)) {
+      // Show full date including year (the actual note date)
+      const fullDate = `${entry.startDate.day}.${entry.startDate.month}.${entry.startDate.year}`;
+      content += `<div class="rc-tooltip-note">${entry.displayName}</div>`;
+      content += `<div class="rc-tooltip-more" style="margin-bottom:4px;">${fullDate}</div>`;
+    }
+
+    if (entries.length > 5) {
+      content += `<div class="rc-tooltip-more">+${entries.length - 5} more</div>`;
+    }
+    content += '</div>';
 
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';
-    this.tooltipEl.style.left = `${event.pageX + 10}px`;
-    this.tooltipEl.style.top = `${event.pageY + 10}px`;
+
+    const rect = this.containerEl_?.getBoundingClientRect();
+    if (rect) {
+      const x = event.clientX - rect.left + 10;
+      const y = event.clientY - rect.top + 10;
+      this.tooltipEl.style.left = `${x}px`;
+      this.tooltipEl.style.top = `${y}px`;
+    }
   }
 
   /**
