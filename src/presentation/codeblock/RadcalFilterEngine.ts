@@ -284,8 +284,7 @@ export class RadcalFilterEngine {
       return value !== undefined && value !== null && value !== '';
     }
 
-    // Unknown function - log warning and return true (don't filter out)
-    console.warn(`Radcal: Unknown filter function: ${expr}`);
-    return true;
+    // Unknown function - throw error to show in codeblock
+    throw new Error(`Unknown filter function: ${expr}`);
   }
 }

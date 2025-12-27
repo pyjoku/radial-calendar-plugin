@@ -57,6 +57,14 @@
 - Storyline-Tracking über das Jahr
 - Visualisiert Zusammenhänge
 
+### Visueller Filter-Builder (wie Bases)
+- Modal/Popover mit Filter-Optionen
+- Dropdown für Funktion (inFolder, hasTag, nameContains, etc.)
+- Input-Feld für Werte
+- AND/OR Logik-Buttons zum Kombinieren
+- Generiert YAML automatisch in den Codeblock
+- Inspiriert von Obsidian Bases Filter-Picker
+
 ### Weitere Ideen
 - [ ] Drag & Drop zum Verschieben von Notizen zwischen Tagen
 - [ ] Export als Bild (SVG/PNG)
@@ -74,6 +82,10 @@
 
 ## Completed (Recent)
 
+- [x] v1.17.16: Bases-kompatibles `filters` alias
+- [x] v1.17.15: Array-Syntax für Filter (implizites AND)
+- [x] v1.17.14: Cross-year arc gap fix
+- [x] v1.17.13: Erweiterte Filter (name, nameContains, tagContains, property), Cross-year Indikatoren verbessert
 - [x] v1.17.10: Codeblock Source Toggle Button
 - [x] v1.17.9: Year boundary marker, cross-year arc indicators
 - [x] v1.17.8: Ring separators (visible lines between rings)
