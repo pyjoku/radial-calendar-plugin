@@ -46,6 +46,12 @@
 - Farbcodierte Tags und Labels
 - Verknüpfte Notizen/Charaktere/Orte
 
+### Curved Text am Kreisrand (In-Place Anzeige)
+- Bei Klick auf Element: Text erscheint am Kreisrand entlang
+- Folgt der Krümmung des Rings
+- Alternative zu Popup/Tooltip - direkt im Kalender integriert
+- Inspiriert von Radial Timeline Plugin
+
 ### Verbindungslinien zwischen Arcs
 - Linien die Beziehungen zwischen Events zeigen
 - Storyline-Tracking über das Jahr
@@ -68,7 +74,12 @@
 
 ## Completed (Recent)
 
-- [x] v1.17.1: Fix calendar source rings not showing (showAsRing undefined)
+- [x] v1.17.10: Codeblock Source Toggle Button
+- [x] v1.17.9: Year boundary marker, cross-year arc indicators
+- [x] v1.17.8: Ring separators (visible lines between rings)
+- [x] v1.17.6-7: Dynamic arc/daily allocation, 1px ring gap
+- [x] v1.17.3-5: Combined daily notes + spanning arcs view
+- [x] v1.17.2: Spanning arcs toggle for calendar sources
+- [x] v1.17.1: Fix calendar source rings not showing
 - [x] v1.17.0: Show as Ring toggle, centered tooltips
 - [x] v1.16.0: Google Calendar Sync via iCal URLs
-- [x] v1.15.x: Anniversary indicators in day ring, responsive fonts

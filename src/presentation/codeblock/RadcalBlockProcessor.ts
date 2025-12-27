@@ -74,19 +74,13 @@ class RadcalRenderChild extends MarkdownRenderChild {
       attr: { 'aria-label': 'Edit source' }
     });
     editBtn.innerHTML = '&lt;/&gt;';
-    editBtn.addEventListener('click', () => {
-      // Get the active view and switch to source mode
-      const view = this.app.workspace.getActiveViewOfType(
-        require('obsidian').MarkdownView
-      );
-      if (view) {
-        // @ts-ignore - getMode exists but not in types
-        const currentMode = view.getMode?.() || view.currentMode;
-        if (currentMode === 'preview') {
-          // @ts-ignore - setState exists
-          view.setState?.({ mode: 'source' }, { history: false });
-        }
-      }
+    editBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Use Obsidian's built-in command to toggle edit mode
+      // @ts-ignore - commands exists on app
+      this.app.commands.executeCommandById('markdown:toggle-preview');
     });
 
     // Add tooltip element
