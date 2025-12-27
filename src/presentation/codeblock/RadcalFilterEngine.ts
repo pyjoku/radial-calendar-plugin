@@ -38,9 +38,9 @@ export interface YamlFilter {
 }
 
 /**
- * Filter type - either string expression or YAML structure
+ * Filter type - string, YAML structure, or array (implicit AND)
  */
-export type FilterExpression = string | YamlFilter;
+export type FilterExpression = string | YamlFilter | FilterExpression[];
 
 /**
  * Filter engine for Bases-compatible syntax
@@ -120,6 +120,10 @@ export class RadcalFilterEngine {
   evaluate(filter: FilterExpression, context: FilterContext): boolean {
     if (typeof filter === 'string') {
       return this.evaluateString(filter, context);
+    }
+    // Handle arrays as implicit AND
+    if (Array.isArray(filter)) {
+      return filter.every(f => this.evaluate(f, context));
     }
     return this.evaluateYaml(filter, context);
   }
