@@ -396,6 +396,129 @@
   margin: 12px 0 0 0;
 }
 
+/* ============================================
+   Local Calendar (Sidebar View) Styles
+   ============================================ */
+
+.local-calendar-view {
+  height: 100%;
+  padding: 8px;
+  background: var(--background-primary);
+}
+
+.lc-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.lc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.lc-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.lc-svg {
+  width: 100%;
+  max-width: 250px;
+  height: auto;
+}
+
+.lc-background {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+/* Life Ring Decades */
+.lc-life-decade {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 0.5;
+}
+
+.lc-life-decade--past {
+  fill: var(--background-secondary-alt);
+  fill-opacity: 0.5;
+}
+
+.lc-life-decade--current {
+  fill: var(--interactive-accent);
+  fill-opacity: 0.2;
+}
+
+.lc-decade-label {
+  font-size: 7px;
+  fill: var(--text-faint);
+  pointer-events: none;
+}
+
+/* Month Ring */
+.lc-month {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 0.5;
+}
+
+.lc-month--past {
+  fill: var(--background-secondary-alt);
+  fill-opacity: 0.4;
+}
+
+.lc-month--current {
+  fill: var(--interactive-accent);
+  fill-opacity: 0.2;
+}
+
+.lc-month--note {
+  fill: var(--text-accent);
+  fill-opacity: 0.3;
+}
+
+.lc-month-label {
+  font-size: 8px;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Center */
+.lc-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.lc-center-day {
+  font-size: 24px;
+  font-weight: 700;
+  fill: var(--text-normal);
+}
+
+/* Markers */
+.lc-marker--note {
+  stroke: var(--text-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.lc-marker--today {
+  stroke: var(--text-error);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .rc-year-title {
