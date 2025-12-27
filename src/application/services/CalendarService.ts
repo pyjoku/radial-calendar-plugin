@@ -15,7 +15,8 @@ import { MultiDayEngine, BarPosition } from '../../core/engines/MultiDayEngine';
 import { createCalendarEntry, CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
 import { getToday } from '../../core/domain/models/LocalDate';
-import type { LinearCalendarSettings } from '../../core/domain/types';
+import type { LinearCalendarSettings, LifePhase, RingColorName } from '../../core/domain/types';
+import { createLocalDate } from '../../core/domain/models/LocalDate';
 
 /**
  * Events that can be subscribed to
@@ -222,6 +223,225 @@ export class CalendarService {
       entryCount: stats.entryCount,
       dateCount: stats.dateCount,
     };
+  }
+
+  // ============================================================================
+  // Life Phases
+  // ============================================================================
+
+  /**
+   * Loads life phases from a folder
+   *
+   * Each file in the folder should have YAML frontmatter with:
+   * - phase-start: Start date (YYYY-MM-DD)
+   * - phase-end: End date (YYYY-MM-DD) or empty for ongoing
+   * - phase-color: Color name
+   * - phase-label: Display label
+   *
+   * @param folder - The folder path to load phases from
+   * @param config - Field name configuration
+   * @returns Array of parsed life phases
+   */
+  loadLifePhases(
+    folder: string,
+    config: {
+      startDateField: string;
+      endDateField: string;
+      colorField: string;
+      labelField: string;
+    } = {
+      startDateField: 'phase-start',
+      endDateField: 'phase-end',
+      colorField: 'phase-color',
+      labelField: 'phase-label',
+    }
+  ): LifePhase[] {
+    if (!folder) return [];
+
+    const files = this.vaultRepository.getAllMarkdownFiles();
+    const phases: LifePhase[] = [];
+
+    // Filter files in the specified folder
+    const folderPrefix = folder.endsWith('/') ? folder : `${folder}/`;
+    const folderFiles = files.filter(
+      (f) => f.path === `${folder}.md` || f.path.startsWith(folderPrefix)
+    );
+
+    for (const fileInfo of folderFiles) {
+      const metadata = this.metadataRepository.getMetadataByPath(fileInfo.path);
+      const frontmatter = metadata?.frontmatter;
+
+      if (!frontmatter) continue;
+
+      // Parse start date
+      const startStr = frontmatter[config.startDateField];
+      if (!startStr || typeof startStr !== 'string') continue;
+
+      const startDate = this.parseYAMLDate(startStr);
+      if (!startDate) continue;
+
+      // Parse end date (optional - null means ongoing)
+      const endStr = frontmatter[config.endDateField];
+      let endDate: LocalDate | null = null;
+      if (endStr && typeof endStr === 'string' && endStr.trim() !== '') {
+        endDate = this.parseYAMLDate(endStr);
+      }
+
+      // Get color (default to blue)
+      const colorStr = frontmatter[config.colorField];
+      const color: RingColorName = this.isValidColor(colorStr) ? colorStr : 'blue';
+
+      // Get label (default to filename)
+      const label = frontmatter[config.labelField] || fileInfo.basename;
+
+      phases.push({
+        filePath: fileInfo.path,
+        label: String(label),
+        startDate,
+        endDate,
+        color,
+      });
+    }
+
+    // Sort by start date
+    return phases.sort((a, b) => {
+      if (a.startDate.year !== b.startDate.year) return a.startDate.year - b.startDate.year;
+      if (a.startDate.month !== b.startDate.month) return a.startDate.month - b.startDate.month;
+      return a.startDate.day - b.startDate.day;
+    });
+  }
+
+  /**
+   * Parses a YAML date string (YYYY-MM-DD) to LocalDate
+   */
+  private parseYAMLDate(dateStr: string): LocalDate | null {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+    return createLocalDate(year, month, day);
+  }
+
+  /**
+   * Checks if a value is a valid color name
+   */
+  private isValidColor(value: unknown): value is RingColorName {
+    const validColors: RingColorName[] = [
+      'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink',
+      'teal', 'cyan', 'magenta', 'lime', 'amber', 'indigo', 'violet', 'rose',
+      'gray', 'slate', 'stone',
+    ];
+    return typeof value === 'string' && validColors.includes(value as RingColorName);
+  }
+
+  /**
+   * Converts life phases to rendered segments with angles
+   *
+   * The life ring spans from birthYear to expectedEndYear.
+   * Each phase is mapped to its angular position based on dates.
+   *
+   * @param phases - Array of life phases
+   * @param birthYear - Birth year
+   * @param expectedLifespan - Expected lifespan in years
+   * @returns Array of rendered segments with angles
+   */
+  computeLifePhaseSegments(
+    phases: LifePhase[],
+    birthYear: number,
+    expectedLifespan: number
+  ): import('../../core/domain/types').RenderedSegment[] {
+    const expectedEndYear = birthYear + expectedLifespan;
+    const totalYears = expectedLifespan;
+
+    // Today for ongoing phases
+    const today = getToday();
+
+    return phases.map((phase) => {
+      // Calculate start angle (0 = top, clockwise)
+      const startYearFraction = this.dateToYearFraction(phase.startDate);
+      const startYearsFromBirth = (phase.startDate.year - birthYear) + startYearFraction;
+      const startAngle = (startYearsFromBirth / totalYears) * 2 * Math.PI - Math.PI / 2;
+
+      // Calculate end angle
+      let endYearFraction: number;
+      let endDate: LocalDate;
+      let isOngoing = false;
+
+      if (phase.endDate) {
+        endDate = phase.endDate;
+        endYearFraction = this.dateToYearFraction(phase.endDate);
+      } else {
+        // Ongoing phase - extends to expected end
+        isOngoing = true;
+        endDate = { year: expectedEndYear, month: 12, day: 31 };
+        endYearFraction = 1;
+      }
+
+      const endYearsFromBirth = (endDate.year - birthYear) + endYearFraction;
+      const endAngle = (endYearsFromBirth / totalYears) * 2 * Math.PI - Math.PI / 2;
+
+      // Calculate today angle for ongoing phases
+      let todayAngle: number | undefined;
+      if (isOngoing) {
+        const todayYearFraction = this.dateToYearFraction(today);
+        const todayYearsFromBirth = (today.year - birthYear) + todayYearFraction;
+        todayAngle = (todayYearsFromBirth / totalYears) * 2 * Math.PI - Math.PI / 2;
+      }
+
+      // Get hex color
+      const { RING_COLORS } = require('../../core/domain/types');
+      const hexColor = RING_COLORS[phase.color] || RING_COLORS.blue;
+
+      return {
+        id: phase.filePath,
+        filePath: phase.filePath,
+        label: phase.label,
+        startAngle,
+        endAngle,
+        color: hexColor,
+        entries: [],
+        isOngoing,
+        todayAngle,
+      };
+    });
+  }
+
+  /**
+   * Converts a date to a year fraction (0-1)
+   * Jan 1 = 0, Dec 31 = ~1
+   */
+  private dateToYearFraction(date: LocalDate): number {
+    const daysInYear = this.isLeapYear(date.year) ? 366 : 365;
+    const dayOfYear = this.getDayOfYear(date);
+    return (dayOfYear - 1) / daysInYear;
+  }
+
+  /**
+   * Checks if a year is a leap year
+   */
+  private isLeapYear(year: number): boolean {
+    return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  }
+
+  /**
+   * Gets the day of year (1-366)
+   */
+  private getDayOfYear(date: LocalDate): number {
+    const daysPerMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (this.isLeapYear(date.year)) {
+      daysPerMonth[1] = 29;
+    }
+
+    let dayOfYear = date.day;
+    for (let i = 0; i < date.month - 1; i++) {
+      dayOfYear += daysPerMonth[i];
+    }
+    return dayOfYear;
   }
 
   /**

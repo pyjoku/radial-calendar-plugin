@@ -367,6 +367,26 @@
   pointer-events: none;
 }
 
+/* Life Phases (from folder) */
+.rc-life-phase {
+  stroke: var(--background-primary);
+  stroke-width: 1;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.rc-life-phase:hover {
+  opacity: 0.85;
+  stroke-width: 2;
+}
+
+.rc-phase-label {
+  font-size: 9px;
+  font-weight: 500;
+  fill: var(--text-on-accent);
+  pointer-events: none;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
 /* Center Display for Nested Clock */
 .rc-center-year {
   font-size: 32px;

@@ -129,6 +129,41 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
             }
           });
       });
+
+    // Life Phases Section
+    containerEl.createEl('h4', { text: 'Lebensphasen' });
+
+    new Setting(containerEl)
+      .setName('Lebensphasen-Ordner')
+      .setDesc('Ordner mit Lebensphasen-Notizen (YAML: phase-start, phase-end, phase-color, phase-label)')
+      .addText((text) => {
+        text
+          .setPlaceholder('z.B. Life/Phases')
+          .setValue(this.plugin.settings.lifePhasesFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.lifePhasesFolder = value;
+            await this.plugin.saveSettings();
+          });
+        new FolderSuggest(this.app, text.inputEl);
+      });
+
+    // Help text for life phases
+    const helpDiv = containerEl.createDiv({ cls: 'setting-item-description' });
+    helpDiv.innerHTML = `
+      <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+        <strong>Beispiel YAML für eine Lebensphase:</strong><br>
+        <code style="display: block; padding: 8px; background: var(--background-secondary); border-radius: 4px; margin-top: 4px;">
+---<br>
+phase-start: 1983-09-01<br>
+phase-end: 1987-07-15<br>
+phase-color: blue<br>
+phase-label: Grundschule<br>
+---
+        </code>
+        <br>
+        <em>Leer lassen für "ongoing" (aktuelle Phasen zeigen Gradient bis Lebensende)</em>
+      </p>
+    `;
   }
 
   /**

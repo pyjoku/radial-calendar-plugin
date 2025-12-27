@@ -462,6 +462,32 @@ export type RadialViewMode = 'annual' | 'life';
 export type CenterDisplayMode = 'countdown' | 'stats' | 'navigation';
 
 /**
+ * Ring type - determines how segments are computed
+ */
+export type RingType =
+  | 'life-years'    // Years from birth to expected lifespan
+  | 'life-phases'   // Life phases from YAML frontmatter
+  | 'year-months'   // 12 months
+  | 'year-weeks'    // 52 weeks
+  | 'year-days'     // 365/366 days
+  | 'events';       // Variable events with start/end dates
+
+/**
+ * Segment computation style
+ */
+export type RingSegmentStyle =
+  | 'fixed'         // Fixed number of segments (365 days, 12 months, etc.)
+  | 'proportional'  // Equal width per item
+  | 'from-yaml';    // Start/end dates from YAML frontmatter
+
+/**
+ * Folder pattern type
+ */
+export type FolderPatternType =
+  | 'fixed'             // Static folder path
+  | 'year-substitution'; // {year} gets replaced with current year
+
+/**
  * Configuration for a single ring
  */
 export interface RingConfig {
@@ -471,13 +497,13 @@ export interface RingConfig {
   /** Display name */
   readonly name: string;
 
-  /** Folder path in vault */
+  /** Folder path in vault (supports {year} placeholder) */
   readonly folder: string;
 
   /** Primary color (color name) */
   readonly color: RingColorName;
 
-  /** Segment type */
+  /** Segment type (legacy - use ringType instead) */
   readonly segmentType: SegmentType;
 
   /** Whether ring is enabled */
@@ -485,7 +511,108 @@ export interface RingConfig {
 
   /** Position order (0 = outermost) */
   readonly order: number;
+
+  // ======== Extended Ring Configuration ========
+
+  /** Ring type - determines segment computation */
+  readonly ringType?: RingType;
+
+  /** How segments are computed */
+  readonly segmentStyle?: RingSegmentStyle;
+
+  /** Folder pattern type */
+  readonly folderPattern?: FolderPatternType;
+
+  /** Include subfolders */
+  readonly recursive?: boolean;
+
+  // ======== YAML Field Mapping (for from-yaml) ========
+
+  /** YAML field for start date (e.g., "phase-start") */
+  readonly startDateField?: string;
+
+  /** YAML field for end date (e.g., "phase-end") */
+  readonly endDateField?: string;
+
+  /** YAML field for color (e.g., "phase-color") */
+  readonly colorField?: string;
+
+  /** YAML field for label (e.g., "phase-label") */
+  readonly labelField?: string;
+
+  // ======== Display Options ========
+
+  /** Allow gaps between segments */
+  readonly showGaps?: boolean;
+
+  /** Show labels on segments */
+  readonly showLabels?: boolean;
 }
+
+/**
+ * Rendered segment for display
+ */
+export interface RenderedSegment {
+  /** Unique identifier */
+  id: string;
+
+  /** File path in vault (if applicable) */
+  filePath?: string;
+
+  /** Display label */
+  label: string;
+
+  /** Start angle in radians */
+  startAngle: number;
+
+  /** End angle in radians */
+  endAngle: number;
+
+  /** Color (hex or CSS color) */
+  color: string;
+
+  /** Associated calendar entries */
+  entries: readonly CalendarEntry[];
+
+  /** Is this an ongoing phase (no end date) */
+  isOngoing?: boolean;
+
+  /** Angle position of "today" within segment (for gradients) */
+  todayAngle?: number;
+
+  /** Track index for overlapping phases (0, 1, 2, ...) */
+  track?: number;
+}
+
+/**
+ * Phase with track assignment for sub-ring rendering
+ */
+export interface PhaseWithTrack extends RenderedSegment {
+  track: number;
+}
+
+/**
+ * Life phase parsed from YAML frontmatter
+ */
+export interface LifePhase {
+  /** File path in vault */
+  filePath: string;
+
+  /** Phase label */
+  label: string;
+
+  /** Start date */
+  startDate: LocalDate;
+
+  /** End date (null = ongoing) */
+  endDate: LocalDate | null;
+
+  /** Color name */
+  color: RingColorName;
+}
+
+// Re-export CalendarEntry for RenderedSegment
+import type { CalendarEntry } from '../models/CalendarEntry';
 
 /**
  * Periodic notes format configuration
@@ -539,6 +666,11 @@ export interface RadialCalendarSettings {
 
   /** Folder for annual recurring notes (birthdays, anniversaries) */
   annualRecurringFolder: string;
+
+  // ======== Life Phases ========
+
+  /** Folder for life phase notes */
+  lifePhasesFolder: string;
 
   // ======== Outer Segments ========
 
@@ -620,7 +752,130 @@ export function createDefaultRing(order: number): RingConfig {
     segmentType: 'monthly',
     enabled: true,
     order,
+    // Extended defaults
+    ringType: 'year-days',
+    segmentStyle: 'fixed',
+    folderPattern: 'fixed',
+    recursive: false,
+    showGaps: false,
+    showLabels: false,
   };
+}
+
+/**
+ * Create a life-phases ring configuration
+ */
+export function createLifePhasesRing(folder: string, order: number = 0): RingConfig {
+  return {
+    id: `life-phases-${Date.now()}`,
+    name: 'Lebensphasen',
+    folder,
+    color: 'blue',
+    segmentType: 'custom',
+    enabled: true,
+    order,
+    // Life phases specific
+    ringType: 'life-phases',
+    segmentStyle: 'from-yaml',
+    folderPattern: 'fixed',
+    recursive: false,
+    startDateField: 'phase-start',
+    endDateField: 'phase-end',
+    colorField: 'phase-color',
+    labelField: 'phase-label',
+    showGaps: true,
+    showLabels: true,
+  };
+}
+
+/**
+ * Create a year-events ring configuration
+ */
+export function createEventsRing(folder: string, order: number = 1): RingConfig {
+  return {
+    id: `events-${Date.now()}`,
+    name: 'Events',
+    folder,
+    color: 'teal',
+    segmentType: 'custom',
+    enabled: true,
+    order,
+    // Events specific
+    ringType: 'events',
+    segmentStyle: 'from-yaml',
+    folderPattern: 'year-substitution',
+    recursive: false,
+    startDateField: 'event-start',
+    endDateField: 'event-end',
+    colorField: 'event-color',
+    labelField: 'event-label',
+    showGaps: true,
+    showLabels: true,
+  };
+}
+
+// ============================================================================
+// Track Assignment for Overlapping Phases
+// ============================================================================
+
+/**
+ * Assign tracks to overlapping phases (for sub-ring rendering)
+ *
+ * Uses a greedy interval scheduling algorithm:
+ * - Sort phases by start angle
+ * - For each phase, find the first available track
+ * - If no track is available, create a new one
+ */
+export function assignTracks(phases: RenderedSegment[]): PhaseWithTrack[] {
+  // Sort by start angle
+  const sorted = [...phases].sort((a, b) => a.startAngle - b.startAngle);
+  const tracks: { endAngle: number }[] = [];
+
+  return sorted.map(phase => {
+    // Find first track that is free (its endAngle <= phase.startAngle)
+    let trackIndex = tracks.findIndex(t => t.endAngle <= phase.startAngle);
+
+    if (trackIndex === -1) {
+      // No free track, create a new one
+      trackIndex = tracks.length;
+      tracks.push({ endAngle: phase.endAngle });
+    } else {
+      // Reuse existing track
+      tracks[trackIndex].endAngle = phase.endAngle;
+    }
+
+    return { ...phase, track: trackIndex };
+  });
+}
+
+/**
+ * Compute sub-ring radii for a given track
+ *
+ * @param outerRadius - Outer radius of the parent ring
+ * @param innerRadius - Inner radius of the parent ring
+ * @param trackCount - Total number of tracks
+ * @param trackIndex - Index of the track (0 = outermost)
+ * @returns Inner and outer radius for this track
+ */
+export function computeSubRingRadii(
+  outerRadius: number,
+  innerRadius: number,
+  trackCount: number,
+  trackIndex: number
+): { inner: number; outer: number } {
+  const trackHeight = (outerRadius - innerRadius) / trackCount;
+  return {
+    outer: outerRadius - trackIndex * trackHeight,
+    inner: outerRadius - (trackIndex + 1) * trackHeight,
+  };
+}
+
+/**
+ * Get the maximum number of tracks needed for overlapping phases
+ */
+export function getMaxTrackCount(phases: PhaseWithTrack[]): number {
+  if (phases.length === 0) return 1;
+  return Math.max(...phases.map(p => p.track)) + 1;
 }
 
 // ============================================================================
@@ -716,6 +971,8 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
   dailyNoteFolder: '',
   calendarFilterFolder: '',
   annualRecurringFolder: '',
+  // Life phases
+  lifePhasesFolder: '',
   // Outer segments
   annualSegmentType: 'none',
   customSegments: [],

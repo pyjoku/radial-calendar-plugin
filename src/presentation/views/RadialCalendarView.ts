@@ -13,7 +13,7 @@ import type { CalendarService } from '../../application/services/CalendarService
 import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
 import { getToday, createLocalDate, getWeekday, getDaysInMonth } from '../../core/domain/models/LocalDate';
-import type { RadialCalendarSettings, RingConfig, OuterSegmentConfig, LifeActConfig } from '../../core/domain/types';
+import type { RadialCalendarSettings, RingConfig, OuterSegmentConfig, LifeActConfig, RenderedSegment, PhaseWithTrack } from '../../core/domain/types';
 import {
   RING_COLORS,
   PREDEFINED_SEASONS,
@@ -21,6 +21,9 @@ import {
   PREDEFINED_SEMESTERS,
   generate10DayPhases,
   generateWeekSegments,
+  assignTracks,
+  computeSubRingRadii,
+  getMaxTrackCount,
 } from '../../core/domain/types';
 
 export const VIEW_TYPE_RADIAL_CALENDAR = 'radial-calendar-plugin';
@@ -34,12 +37,15 @@ const CENTER = SVG_SIZE / 2;
 
 // Nested Clock Layout (Life View)
 // Outer ring: Life (birth to expected end)
+// Middle ring: Life Phases (configurable from folder)
 // Inner ring: Year (12 months)
 const LIFE_RING_OUTER = 380;
-const LIFE_RING_INNER = 320;
-const YEAR_RING_OUTER = 310;
-const YEAR_RING_INNER = 180;
-const CENTER_RADIUS = 170;
+const LIFE_RING_INNER = 340;
+const LIFE_PHASES_RING_OUTER = 335;
+const LIFE_PHASES_RING_INNER = 260;
+const YEAR_RING_OUTER = 255;
+const YEAR_RING_INNER = 150;
+const CENTER_RADIUS = 140;
 
 // Annual View Layout (single year focus)
 const OUTER_RADIUS = 380;
@@ -270,13 +276,16 @@ export class RadialCalendarView extends ItemView {
     // Background
     this.renderBackgroundCircle(svg);
 
-    // 1. Render Life Ring (outer)
+    // 1. Render Life Ring (outer - years)
     this.renderLifeRing(svg, birthYear, endYear, year);
 
-    // 2. Render Year Ring (inner)
+    // 2. Render Life Phases Ring (middle - from folder)
+    this.renderLifePhasesRing(svg, birthYear, expectedLifespan);
+
+    // 3. Render Year Ring (inner - months/days)
     this.renderYearRing(svg, year);
 
-    // 3. Life Acts (if configured)
+    // 4. Life Acts (if configured - outer ticks)
     this.renderLifeActsOnRing(svg, birthYear, expectedLifespan);
 
     // 4. Center with info
@@ -354,6 +363,217 @@ export class RadialCalendarView extends ItemView {
       label.setAttribute('dominant-baseline', 'central');
       label.textContent = String(y);
       svg.appendChild(label);
+    }
+  }
+
+  /**
+   * Renders the life phases ring (middle ring with phases from folder)
+   */
+  private renderLifePhasesRing(svg: SVGSVGElement, birthYear: number, lifespan: number): void {
+    if (!this.config) return;
+
+    const folder = this.config.settings.lifePhasesFolder;
+    if (!folder || folder.trim() === '') return;
+
+    // Load phases from folder
+    const phases = this.config.service.loadLifePhases(folder);
+    if (phases.length === 0) return;
+
+    // Convert to rendered segments
+    const segments = this.config.service.computeLifePhaseSegments(phases, birthYear, lifespan);
+
+    // Assign tracks for overlapping phases
+    const phasesWithTracks = assignTracks(segments);
+    const trackCount = getMaxTrackCount(phasesWithTracks);
+
+    // Create SVG defs for gradients
+    const defs = this.getOrCreateDefs(svg);
+
+    // Render each phase
+    for (const phase of phasesWithTracks) {
+      this.renderLifePhaseArc(svg, defs, phase, trackCount);
+    }
+  }
+
+  /**
+   * Gets or creates the <defs> element in the SVG
+   */
+  private getOrCreateDefs(svg: SVGSVGElement): SVGDefsElement {
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    return defs as SVGDefsElement;
+  }
+
+  /**
+   * Renders a single life phase arc with optional gradient for ongoing phases
+   */
+  private renderLifePhaseArc(
+    svg: SVGSVGElement,
+    defs: SVGDefsElement,
+    phase: PhaseWithTrack,
+    trackCount: number
+  ): void {
+    // Calculate sub-ring radii based on track
+    const radii = computeSubRingRadii(
+      LIFE_PHASES_RING_OUTER,
+      LIFE_PHASES_RING_INNER,
+      trackCount,
+      phase.track
+    );
+
+    // Create arc path
+    const path = this.createArcPath(radii.inner, radii.outer, phase.startAngle, phase.endAngle);
+
+    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    arc.setAttribute('d', path);
+    arc.setAttribute('class', 'rc-life-phase');
+
+    // Apply color or gradient
+    if (phase.isOngoing && phase.todayAngle !== undefined) {
+      // Create gradient for ongoing phase
+      const gradientId = `phase-gradient-${phase.id.replace(/[^a-zA-Z0-9]/g, '-')}`;
+      this.createPhaseGradient(defs, gradientId, phase);
+      arc.style.fill = `url(#${gradientId})`;
+    } else {
+      arc.style.fill = phase.color;
+    }
+
+    // Click handler to open phase file
+    if (phase.filePath) {
+      arc.style.cursor = 'pointer';
+      arc.addEventListener('click', () => {
+        this.config?.openFile(phase.filePath!);
+      });
+    }
+
+    // Hover tooltip
+    arc.addEventListener('mouseenter', (e) => {
+      this.showPhaseTooltip(e, phase);
+    });
+    arc.addEventListener('mouseleave', () => this.hideTooltip());
+
+    svg.appendChild(arc);
+
+    // Render label if space permits
+    if (phase.label && (phase.endAngle - phase.startAngle) > 0.15) {
+      this.renderPhaseLabel(svg, phase, radii);
+    }
+  }
+
+  /**
+   * Creates an SVG gradient for an ongoing phase
+   * Solid color from start to today, fading from today to end
+   */
+  private createPhaseGradient(
+    defs: SVGDefsElement,
+    gradientId: string,
+    phase: PhaseWithTrack
+  ): void {
+    // Calculate the percentage where "today" falls in the phase arc
+    const totalAngle = phase.endAngle - phase.startAngle;
+    const todayOffset = (phase.todayAngle! - phase.startAngle) / totalAngle;
+    const todayPercent = Math.max(0, Math.min(100, todayOffset * 100));
+
+    // We need to use a linear gradient that follows the arc
+    // For simplicity, we'll use a conic-style effect by creating stops
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    gradient.setAttribute('id', gradientId);
+
+    // Calculate gradient direction based on arc midpoint
+    const midAngle = (phase.startAngle + phase.endAngle) / 2 - Math.PI / 2;
+    const x1 = 50 + 50 * Math.cos(phase.startAngle - Math.PI / 2);
+    const y1 = 50 + 50 * Math.sin(phase.startAngle - Math.PI / 2);
+    const x2 = 50 + 50 * Math.cos(phase.endAngle - Math.PI / 2);
+    const y2 = 50 + 50 * Math.sin(phase.endAngle - Math.PI / 2);
+
+    gradient.setAttribute('x1', `${x1}%`);
+    gradient.setAttribute('y1', `${y1}%`);
+    gradient.setAttribute('x2', `${x2}%`);
+    gradient.setAttribute('y2', `${y2}%`);
+
+    // Solid color until today
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('stop-color', phase.color);
+    stop1.setAttribute('stop-opacity', '1');
+    gradient.appendChild(stop1);
+
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', `${todayPercent}%`);
+    stop2.setAttribute('stop-color', phase.color);
+    stop2.setAttribute('stop-opacity', '1');
+    gradient.appendChild(stop2);
+
+    // Fade out after today
+    const stop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop3.setAttribute('offset', `${todayPercent + 1}%`);
+    stop3.setAttribute('stop-color', phase.color);
+    stop3.setAttribute('stop-opacity', '0.4');
+    gradient.appendChild(stop3);
+
+    const stop4 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop4.setAttribute('offset', '100%');
+    stop4.setAttribute('stop-color', phase.color);
+    stop4.setAttribute('stop-opacity', '0.15');
+    gradient.appendChild(stop4);
+
+    defs.appendChild(gradient);
+  }
+
+  /**
+   * Renders a label on a phase arc
+   */
+  private renderPhaseLabel(
+    svg: SVGSVGElement,
+    phase: PhaseWithTrack,
+    radii: { inner: number; outer: number }
+  ): void {
+    // Position at middle of arc
+    const midAngle = (phase.startAngle + phase.endAngle) / 2 - Math.PI / 2;
+    const labelRadius = (radii.inner + radii.outer) / 2;
+    const x = CENTER + labelRadius * Math.cos(midAngle);
+    const y = CENTER + labelRadius * Math.sin(midAngle);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', String(x));
+    text.setAttribute('y', String(y));
+    text.setAttribute('class', 'rc-phase-label');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'central');
+
+    // Rotate for readability
+    const rotationDeg = (midAngle + Math.PI / 2) * 180 / Math.PI;
+    const adjustedRotation = rotationDeg > 90 && rotationDeg < 270 ? rotationDeg + 180 : rotationDeg;
+    text.setAttribute('transform', `rotate(${adjustedRotation}, ${x}, ${y})`);
+
+    text.textContent = phase.label;
+    svg.appendChild(text);
+  }
+
+  /**
+   * Shows tooltip for life phase hover
+   */
+  private showPhaseTooltip(event: MouseEvent, phase: PhaseWithTrack): void {
+    if (!this.tooltipEl) return;
+
+    let content = `<div class="rc-tooltip-date">${phase.label}</div>`;
+
+    if (phase.isOngoing) {
+      content += '<div class="rc-tooltip-note" style="color: var(--text-accent);">Aktiv (ongoing)</div>';
+    }
+
+    this.tooltipEl.innerHTML = content;
+    this.tooltipEl.style.display = 'block';
+
+    const rect = this.containerEl_?.getBoundingClientRect();
+    if (rect) {
+      const x = event.clientX - rect.left + 10;
+      const y = event.clientY - rect.top + 10;
+      this.tooltipEl.style.left = `${x}px`;
+      this.tooltipEl.style.top = `${y}px`;
     }
   }
 
