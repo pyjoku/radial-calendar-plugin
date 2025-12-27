@@ -1160,9 +1160,10 @@ export class RadialCalendarView extends ItemView {
     rings.push(...configuredRings);
 
     // Add calendar sources with showAsRing enabled as virtual rings
+    // Note: showAsRing defaults to true if undefined (for backwards compatibility)
     const calendarSources = this.config.settings.calendarSources || [];
     const calendarRings = calendarSources
-      .filter(source => source.enabled && source.showAsRing && source.folder)
+      .filter(source => source.enabled && source.showAsRing !== false && source.folder)
       .map((source, index) => ({
         id: `__calendar_${source.id}__`,
         name: source.name,
