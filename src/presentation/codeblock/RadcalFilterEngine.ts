@@ -2,9 +2,14 @@
  * RadcalFilterEngine - Bases-compatible filter engine for radcal codeblocks
  *
  * Supports:
- * - file.hasTag("tag")
- * - file.inFolder("folder")
- * - file.hasLink("note")
+ * - file.hasTag("tag") - exact tag or nested (tag/subtag)
+ * - file.tagContains("text") - tag contains text (wildcard)
+ * - file.inFolder("folder") - folder or subfolder
+ * - file.hasLink("note") - links to note
+ * - file.name("text") - exact filename match (without extension)
+ * - file.nameContains("text") - filename contains text (wildcard)
+ * - file.property("key", "value") - property equals value
+ * - file.hasProperty("key") - property exists
  * - Operators: &&, ||, !
  * - YAML structure: and, or, not
  */
@@ -20,6 +25,7 @@ export interface FilterContext {
   tags: string[];
   folder: string;
   links: string[];
+  properties: Record<string, unknown>;
 }
 
 /**
@@ -81,12 +87,23 @@ export class RadcalFilterEngine {
       }
     }
 
+    // Collect properties from frontmatter
+    const properties: Record<string, unknown> = {};
+    if (metadata?.frontmatter) {
+      for (const [key, value] of Object.entries(metadata.frontmatter)) {
+        if (key !== 'position') { // skip internal obsidian property
+          properties[key.toLowerCase()] = value;
+        }
+      }
+    }
+
     return {
       file,
       metadata,
       tags: [...new Set(tags)], // dedupe
       folder: file.parent?.path ?? '',
       links: [...new Set(links)], // dedupe
+      properties,
     };
   }
 
@@ -200,11 +217,18 @@ export class RadcalFilterEngine {
    * Evaluate a function call
    */
   private evaluateFunction(expr: string, context: FilterContext): boolean {
-    // file.hasTag("tag")
+    // file.hasTag("tag") - exact match or nested tags
     const hasTagMatch = expr.match(/^file\.hasTag\s*\(\s*["']([^"']+)["']\s*\)$/);
     if (hasTagMatch) {
       const tag = this.normalizeTag(hasTagMatch[1]);
       return context.tags.some(t => t === tag || t.startsWith(tag + '/'));
+    }
+
+    // file.tagContains("text") - wildcard/contains match for tags
+    const tagContainsMatch = expr.match(/^file\.tagContains\s*\(\s*["']([^"']+)["']\s*\)$/);
+    if (tagContainsMatch) {
+      const searchText = tagContainsMatch[1].toLowerCase();
+      return context.tags.some(t => t.includes(searchText));
     }
 
     // file.inFolder("folder")
@@ -220,6 +244,40 @@ export class RadcalFilterEngine {
     if (hasLinkMatch) {
       const link = hasLinkMatch[1].toLowerCase();
       return context.links.some(l => l.toLowerCase() === link || l.toLowerCase().endsWith('/' + link));
+    }
+
+    // file.name("text") - exact filename match (case-insensitive, without extension)
+    const nameExactMatch = expr.match(/^file\.name\s*\(\s*["']([^"']+)["']\s*\)$/);
+    if (nameExactMatch) {
+      const searchText = nameExactMatch[1].toLowerCase();
+      const fileName = context.file.basename.toLowerCase();
+      return fileName === searchText;
+    }
+
+    // file.nameContains("text") - filename contains text (case-insensitive)
+    const nameContainsMatch = expr.match(/^file\.nameContains\s*\(\s*["']([^"']+)["']\s*\)$/);
+    if (nameContainsMatch) {
+      const searchText = nameContainsMatch[1].toLowerCase();
+      const fileName = context.file.basename.toLowerCase();
+      return fileName.includes(searchText);
+    }
+
+    // file.property("key", "value") - property equals value
+    const propertyMatch = expr.match(/^file\.property\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)$/);
+    if (propertyMatch) {
+      const key = propertyMatch[1].toLowerCase();
+      const expectedValue = propertyMatch[2].toLowerCase();
+      const actualValue = context.properties[key];
+      if (actualValue === undefined || actualValue === null) return false;
+      return String(actualValue).toLowerCase() === expectedValue;
+    }
+
+    // file.hasProperty("key") - property exists (not null/undefined)
+    const hasPropertyMatch = expr.match(/^file\.hasProperty\s*\(\s*["']([^"']+)["']\s*\)$/);
+    if (hasPropertyMatch) {
+      const key = hasPropertyMatch[1].toLowerCase();
+      const value = context.properties[key];
+      return value !== undefined && value !== null && value !== '';
     }
 
     // Unknown function - log warning and return true (don't filter out)

@@ -16,6 +16,10 @@ A beautiful circular/radial calendar visualization for [Obsidian](https://obsidi
 - **Note Indicators** - See which days have notes at a glance
 - **Birthday Marker** - Mark your birthday on the year ring
 - **Multiple Rings** - Configure multiple folder-based rings
+- **Spanning Arcs** - Display multi-day events as continuous arcs
+- **Google Calendar Sync** - Import events from iCal URLs
+- **Radcal Codeblock** - Embed filtered calendars in notes (Dataview-like)
+- **Advanced Filters** - Filter by tag, folder, filename, property, or links
 - **Customizable Segments** - Show quarters, seasons, weeks, or custom segments
 - **Local Calendar Sidebar** - Compact calendar view in the sidebar
 - **Dark/Light Theme Support** - Adapts to your Obsidian theme
@@ -340,6 +344,21 @@ This renders an interactive radial calendar for 2024 directly in your note.
 
 The filter syntax is compatible with Obsidian Bases:
 
+#### Available Filter Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `file.hasTag("tag")` | Exact tag or nested tags | `file.hasTag("project")` matches `#project`, `#project/work` |
+| `file.tagContains("text")` | Tag contains text (wildcard) | `file.tagContains("lyt")` matches `#lyt`, `#lyt12`, `#catalytisch` |
+| `file.inFolder("folder")` | In folder or subfolder | `file.inFolder("Work")` matches `Work/`, `Work/Projects/` |
+| `file.hasLink("note")` | Links to a note | `file.hasLink("MOC Dashboard")` |
+| `file.name("text")` | Exact filename match | `file.name("Project A")` matches only `Project A.md` |
+| `file.nameContains("text")` | Filename contains text | `file.nameContains("lyt")` matches `LYT12.md`, `catalytisch.md` |
+| `file.property("key", "value")` | Property equals value | `file.property("status", "active")` |
+| `file.hasProperty("key")` | Property exists | `file.hasProperty("due-date")` |
+
+#### Examples
+
 **By Tag:**
 ````markdown
 ```radcal
@@ -354,10 +373,17 @@ filter: file.inFolder("Work/Projects")
 ```
 ````
 
-**By Link:**
+**By Filename (wildcard):**
 ````markdown
 ```radcal
-filter: file.hasLink("MOC Dashboard")
+filter: file.nameContains("LYT")
+```
+````
+
+**By Property:**
+````markdown
+```radcal
+filter: file.property("status", "active")
 ```
 ````
 
@@ -393,7 +419,7 @@ filter:
 ```
 ````
 
-**Nested Tags:** `file.hasTag("my")` matches `#my`, `#my/trips`, `#my/trips/korea`
+**Note:** All string comparisons are case-insensitive.
 
 ### Date Property
 
@@ -491,6 +517,50 @@ lifespan: 85
 
 ---
 
+## Google Calendar Sync
+
+Sync events from Google Calendar (or any iCal-compatible calendar) to display them as a ring in the radial calendar.
+
+### Setup
+
+1. Get your calendar's private iCal URL:
+   - Google Calendar: Settings → Calendar → Integrate calendar → Secret address in iCal format
+   - Other calendars: Look for "iCal export" or "Subscribe URL"
+
+2. In Radial Calendar Settings → Calendar Sources:
+   - Click "Add Calendar Source"
+   - Enter a name and paste the iCal URL
+   - Choose a color and folder for synced events
+   - Enable "Show as Ring" to display as a separate ring
+   - Enable "Show Spanning Arcs" for multi-day events
+
+### Options
+
+| Setting | Description |
+|---------|-------------|
+| Name | Display name for the calendar |
+| URL | Private iCal URL (https://...) |
+| Folder | Local folder to store synced events |
+| Color | Ring color |
+| Sync on Start | Automatically sync when Obsidian starts |
+| Sync Interval | Auto-sync interval in minutes (0 = manual only) |
+| Show as Ring | Display events as a ring in the calendar |
+| Show Spanning Arcs | Display multi-day events as arcs |
+
+### Manual Sync
+
+Use the command palette:
+- "Radial Calendar: Sync All Calendars" - Sync all enabled sources
+- "Radial Calendar: Sync [Calendar Name]" - Sync a specific calendar
+
+### Cross-Year Events
+
+Events that span across year boundaries show indicators:
+- Triangle pointing left (◀) = continues from previous year
+- Triangle pointing right (▶) = continues into next year
+
+---
+
 ## Local Calendar (Sidebar)
 
 A compact radial calendar that fits in the sidebar:
@@ -541,6 +611,8 @@ Configure which frontmatter properties to check in Settings → Date Properties.
 |---------|-------------|
 | Open Radial Calendar | Opens the main radial calendar view |
 | Open Local Calendar | Opens the compact sidebar calendar |
+| Sync All Calendars | Syncs all enabled calendar sources |
+| Sync [Calendar Name] | Syncs a specific calendar source |
 
 ## Keyboard Shortcuts
 

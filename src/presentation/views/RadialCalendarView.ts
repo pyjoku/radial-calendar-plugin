@@ -1495,6 +1495,8 @@ export class RadialCalendarView extends ItemView {
 
   /**
    * Renders an indicator showing an arc continues from/into another year
+   * - continuesIntoNextYear (end): outer edge, pointing clockwise (forward)
+   * - continuesFromPreviousYear (start): inner edge, pointing counter-clockwise (backward)
    */
   private renderCrossYearIndicator(
     svg: SVGSVGElement,
@@ -1503,25 +1505,39 @@ export class RadialCalendarView extends ItemView {
     color: string,
     type: 'start' | 'end'
   ): void {
-    const midRadius = (radii.inner + radii.outer) / 2;
     const adjustedAngle = angle - Math.PI / 2; // Adjust for SVG coordinates
+    const ringWidth = radii.outer - radii.inner;
+    const triSize = ringWidth * 0.6; // Larger triangle
 
-    // Create a small triangle pointing in/out of the year
-    const triSize = (radii.outer - radii.inner) * 0.4;
-    const cx = CENTER + midRadius * Math.cos(adjustedAngle);
-    const cy = CENTER + midRadius * Math.sin(adjustedAngle);
+    // Position: outer edge for 'end' (into next year), inner edge for 'start' (from prev year)
+    const radius = type === 'end' ? radii.outer : radii.inner;
+    const cx = CENTER + radius * Math.cos(adjustedAngle);
+    const cy = CENTER + radius * Math.sin(adjustedAngle);
 
-    // Triangle points based on direction
-    const direction = type === 'start' ? 1 : -1; // 1 = pointing right (into year), -1 = pointing left (out of year)
-    const perpAngle = adjustedAngle + (Math.PI / 2);
+    // Triangle points along the tangent (circumference direction)
+    // 'end' = pointing clockwise (forward), 'start' = pointing counter-clockwise (backward)
+    const tangentAngle = adjustedAngle + Math.PI / 2; // Tangent to circle (clockwise direction)
+    const direction = type === 'end' ? 1 : -1;
 
-    const points = [
-      // Tip of triangle (pointing in direction of continuation)
-      `${cx + direction * triSize * Math.cos(adjustedAngle)},${cy + direction * triSize * Math.sin(adjustedAngle)}`,
-      // Base corners
-      `${cx + triSize * 0.5 * Math.cos(perpAngle)},${cy + triSize * 0.5 * Math.sin(perpAngle)}`,
-      `${cx - triSize * 0.5 * Math.cos(perpAngle)},${cy - triSize * 0.5 * Math.sin(perpAngle)}`,
-    ].join(' ');
+    // Radial direction (inward for 'end', outward for 'start')
+    const radialDir = type === 'end' ? -1 : 1;
+
+    // Arrow-shaped triangle: tip points along tangent, base is perpendicular
+    const tipX = cx + direction * triSize * 0.6 * Math.cos(tangentAngle);
+    const tipY = cy + direction * triSize * 0.6 * Math.sin(tangentAngle);
+
+    // Base corners offset radially and opposite to tip
+    const baseOffset = direction * triSize * 0.3;
+    const baseCx = cx - baseOffset * Math.cos(tangentAngle);
+    const baseCy = cy - baseOffset * Math.sin(tangentAngle);
+
+    const radialOffset = triSize * 0.4;
+    const base1X = baseCx + radialDir * radialOffset * Math.cos(adjustedAngle);
+    const base1Y = baseCy + radialDir * radialOffset * Math.sin(adjustedAngle);
+    const base2X = baseCx - radialDir * radialOffset * Math.cos(adjustedAngle);
+    const base2Y = baseCy - radialDir * radialOffset * Math.sin(adjustedAngle);
+
+    const points = `${tipX},${tipY} ${base1X},${base1Y} ${base2X},${base2Y}`;
 
     const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     triangle.setAttribute('points', points);
