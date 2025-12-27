@@ -786,7 +786,7 @@ export function createDefaultRing(order: number): RingConfig {
 export function createLifePhasesRing(folder: string, order: number = 0): RingConfig {
   return {
     id: `life-phases-${Date.now()}`,
-    name: 'Lebensphasen',
+    name: 'Life Phases',
     folder,
     color: 'blue',
     segmentType: 'custom',
@@ -960,8 +960,8 @@ export function generateWeekSegments(): OuterSegmentConfig[] {
     const startDay = (week - 1) * 7 + 1;
     const endDay = Math.min(week * 7, 365);
     weeks.push({
-      id: `kw-${week}`,
-      label: `KW${week}`,
+      id: `w-${week}`,
+      label: `W${week}`,
       startDay,
       endDay,
     });
@@ -1003,9 +1003,9 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
  */
 export const RING_SEGMENT_TEMPLATE = `---
 # === RADIAL CALENDAR TEMPLATE ===
-# Lösche die Zeilen, die du nicht brauchst
+# Delete the lines you don't need
 
-# FARBEN (wähle eine):
+# COLORS (choose one):
 ring-color: blue
 # ring-color: red
 # ring-color: orange
@@ -1020,7 +1020,7 @@ ring-color: blue
 # ring-color: amber
 # ring-color: indigo
 
-# STIL (wähle einen):
+# STYLE (choose one):
 ring-style: solid
 # ring-style: striped
 # ring-style: dotted
@@ -1030,11 +1030,11 @@ ring-style: solid
 ring-label: ""
 ring-icon: circle
 
-# ZEITRAUM:
+# DATE RANGE:
 date: {{date}}
 # end-date:
 
-# FORTSCHRITT (0-100):
+# PROGRESS (0-100):
 # ring-progress: 0
 ---
 

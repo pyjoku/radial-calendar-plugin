@@ -101,11 +101,12 @@
 
 /* Day Arcs */
 .rc-day-arc {
-  fill: var(--background-primary);
+  fill: var(--background-secondary);
+  fill-opacity: 0.5;
   stroke: var(--background-modifier-border);
   stroke-width: 0.5;
   cursor: pointer;
-  transition: fill 0.15s ease;
+  transition: fill 0.15s ease, fill-opacity 0.15s ease;
 }
 
 .rc-day-arc:hover {

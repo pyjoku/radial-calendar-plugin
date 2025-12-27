@@ -49,8 +49,8 @@ const CENTER_RADIUS = 140;
 
 // Annual View Layout (single year focus)
 const OUTER_RADIUS = 380;
-const INNER_RADIUS = 145;  // More space for month labels
-const MONTH_LABEL_RADIUS = 115;
+const INNER_RADIUS = 145;
+const MONTH_LABEL_RADIUS = 170;  // Inside the ring segments (between inner and outer)
 
 // Shared constants
 const DAY_RING_WIDTH = (OUTER_RADIUS - INNER_RADIUS) / 31;
@@ -209,7 +209,7 @@ export class RadialCalendarView extends ItemView {
 
     // Annual view button
     const annualBtn = toggleContainer.createEl('button', {
-      text: 'Jahresansicht',
+      text: 'Annual',
       cls: `rc-toggle-btn ${currentView === 'annual' ? 'rc-toggle-btn--active' : ''}`,
       attr: { 'aria-label': 'Switch to annual view' },
     });
@@ -224,7 +224,7 @@ export class RadialCalendarView extends ItemView {
 
     // Life view button
     const lifeBtn = toggleContainer.createEl('button', {
-      text: 'Lebensansicht',
+      text: 'Life',
       cls: `rc-toggle-btn ${currentView === 'life' ? 'rc-toggle-btn--active' : ''}`,
       attr: { 'aria-label': 'Switch to life view' },
     });
@@ -953,7 +953,7 @@ export class RadialCalendarView extends ItemView {
     ageText.setAttribute('class', 'rc-center-age');
     ageText.setAttribute('text-anchor', 'middle');
     ageText.setAttribute('dominant-baseline', 'central');
-    ageText.textContent = `${currentAge} Jahre`;
+    ageText.textContent = `${currentAge} years`;
     svg.appendChild(ageText);
   }
 
@@ -964,7 +964,7 @@ export class RadialCalendarView extends ItemView {
     if (!this.tooltipEl) return;
 
     const content = `<div class="rc-tooltip-date">${year}</div>
-      <div class="rc-tooltip-note">Alter: ${age} Jahre</div>`;
+      <div class="rc-tooltip-note">Age: ${age} years</div>`;
 
     this.tooltipEl.innerHTML = content;
     this.tooltipEl.style.display = 'block';

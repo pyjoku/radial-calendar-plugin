@@ -504,9 +504,9 @@ export class CalendarService {
       const clampedStart = this.compareDates(startDate, yearStart) < 0 ? yearStart : startDate;
       const clampedEnd = this.compareDates(endDate, yearEnd) > 0 ? yearEnd : endDate;
 
-      // Get color (default to blue)
+      // Get color (undefined if not set - allows ring color fallback)
       const colorStr = frontmatter[config.colorField];
-      const color: RingColorName = this.isValidColor(colorStr) ? colorStr : 'blue';
+      const color: RingColorName | undefined = this.isValidColor(colorStr) ? colorStr : undefined;
 
       // Get label (default to filename)
       const label = frontmatter[config.labelField] || fileInfo.basename;
@@ -515,9 +515,9 @@ export class CalendarService {
       const startAngle = this.dateToYearAngle(clampedStart, year);
       const endAngle = this.dateToYearAngle(clampedEnd, year);
 
-      // Get hex color
+      // Get hex color only if color was specified in frontmatter
       const { RING_COLORS } = require('../../core/domain/types');
-      const hexColor = RING_COLORS[color] || RING_COLORS.blue;
+      const hexColor = color ? RING_COLORS[color] : undefined;
 
       segments.push({
         id: fileInfo.path,
@@ -525,7 +525,7 @@ export class CalendarService {
         label: String(label),
         startAngle,
         endAngle,
-        color: hexColor,
+        color: hexColor, // undefined means use ring's fallback color
         entries: [],
       });
     }
