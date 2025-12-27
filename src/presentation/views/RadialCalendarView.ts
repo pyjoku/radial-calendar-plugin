@@ -200,6 +200,7 @@ export class RadialCalendarView extends ItemView {
     annualBtn.addEventListener('click', async () => {
       if (this.config && this.config.settings.currentView !== 'annual') {
         const newSettings = { ...this.config.settings, currentView: 'annual' as const };
+        this.config.settings = newSettings; // Update local reference
         await this.config.onSettingsChange(newSettings);
         this.render();
       }
@@ -214,6 +215,7 @@ export class RadialCalendarView extends ItemView {
     lifeBtn.addEventListener('click', async () => {
       if (this.config && this.config.settings.currentView !== 'life') {
         const newSettings = { ...this.config.settings, currentView: 'life' as const };
+        this.config.settings = newSettings; // Update local reference
         await this.config.onSettingsChange(newSettings);
         this.render();
       }
