@@ -100,14 +100,32 @@ export class DateEngine {
 
   /**
    * Parse a date string in YYYY-MM-DD format.
+   * Also supports anniversary dates with placeholder years (XXXX-MM-DD, 4XX-MM-DD, etc.)
    * TIMEZONE-SAFE: Uses string splitting, not Date parsing.
    *
    * @param dateStr - Date string to parse
-   * @returns LocalDate or null if invalid
+   * @returns LocalDate or null if invalid. Anniversary dates return year 0.
    */
   private parseDateString(dateStr: string): LocalDate | null {
     // Trim whitespace
     const trimmed = dateStr.trim();
+
+    // Check for anniversary format first (XXXX-MM-DD, 4XX-MM-DD, XXX-MM-DD, etc.)
+    // Accepts any combination of X's and digits in the year position
+    const anniversaryMatch = trimmed.match(/^[X\d]{3,4}-(\d{2})-(\d{2})$/i);
+    if (anniversaryMatch && trimmed.match(/X/i)) {
+      // This is an anniversary date with placeholder year
+      const month = parseInt(anniversaryMatch[1], 10);
+      const day = parseInt(anniversaryMatch[2], 10);
+
+      // Validate month and day (use year 2000 as leap year for Feb 29 anniversaries)
+      if (!this.isValidDate(2000, month, day)) {
+        return null;
+      }
+
+      // Return with year 0 to indicate anniversary
+      return { year: 0, month, day };
+    }
 
     // Check for ISO date format YYYY-MM-DD
     const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);

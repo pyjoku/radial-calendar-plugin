@@ -104,6 +104,12 @@ export interface CalendarEntry {
   readonly isMultiDay: boolean;
 
   /**
+   * Indicates whether this is an anniversary entry (recurring yearly).
+   * Anniversary entries have year 0 and match any year's month/day.
+   */
+  readonly isAnniversary: boolean;
+
+  /**
    * Additional metadata about the entry.
    */
   readonly metadata: EntryMetadata;
@@ -140,6 +146,9 @@ export function createCalendarEntry(params: {
      params.startDate.month !== params.endDate.month ||
      params.startDate.day !== params.endDate.day);
 
+  // Anniversary entries have year 0 (placeholder for recurring yearly events)
+  const isAnniversary = params.startDate.year === 0;
+
   return Object.freeze({
     id: params.id,
     filePath: params.filePath,
@@ -148,6 +157,7 @@ export function createCalendarEntry(params: {
     startDate: params.startDate,
     endDate: params.endDate,
     isMultiDay,
+    isAnniversary,
     metadata: Object.freeze({
       tags: Object.freeze([...params.metadata.tags]),
       folder: params.metadata.folder,
@@ -190,6 +200,7 @@ export function isCalendarEntry(value: unknown): value is CalendarEntry {
     isLocalDateLike(entry['startDate']) &&
     (entry['endDate'] === null || isLocalDateLike(entry['endDate'])) &&
     typeof entry['isMultiDay'] === 'boolean' &&
+    typeof entry['isAnniversary'] === 'boolean' &&
     isEntryMetadataLike(entry['metadata'])
   );
 }

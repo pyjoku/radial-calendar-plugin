@@ -49,6 +49,9 @@ export class EntryCache {
   /** Map of date key to array of multi-day entries that span that date */
   private readonly multiDayEntriesByDate: Map<string, CalendarEntry[]>;
 
+  /** Map of month-day key (MM-DD) to anniversary entries */
+  private readonly anniversaryEntriesByMonthDay: Map<string, CalendarEntry[]>;
+
   /** Cache statistics */
   private stats: {
     hits: number;
@@ -63,6 +66,7 @@ export class EntryCache {
     this.entriesByPath = new Map();
     this.entriesByDate = new Map();
     this.multiDayEntriesByDate = new Map();
+    this.anniversaryEntriesByMonthDay = new Map();
     this.stats = {
       hits: 0,
       misses: 0,
@@ -85,6 +89,14 @@ export class EntryCache {
     // Add to path index
     this.entriesByPath.set(entry.filePath, entry);
 
+    // Handle anniversary entries (year 0)
+    if (entry.isAnniversary) {
+      const monthDayKey = this.monthDayKey(entry.startDate.month, entry.startDate.day);
+      this.addToDateIndex(monthDayKey, entry, this.anniversaryEntriesByMonthDay);
+      this.log(`Added anniversary entry: ${entry.filePath}`);
+      return;
+    }
+
     // Add to date index
     const startKey = localDateToKey(entry.startDate);
     this.addToDateIndex(startKey, entry, this.entriesByDate);
@@ -98,6 +110,13 @@ export class EntryCache {
   }
 
   /**
+   * Creates a month-day key for anniversary entries
+   */
+  private monthDayKey(month: number, day: number): string {
+    return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  /**
    * Removes an entry from the cache by file path
    * @param filePath - Path of the file to remove
    */
@@ -107,6 +126,14 @@ export class EntryCache {
 
     // Remove from path index
     this.entriesByPath.delete(filePath);
+
+    // Handle anniversary entries
+    if (existing.isAnniversary) {
+      const monthDayKey = this.monthDayKey(existing.startDate.month, existing.startDate.day);
+      this.removeFromDateIndex(monthDayKey, existing.id, this.anniversaryEntriesByMonthDay);
+      this.log(`Removed anniversary entry: ${filePath}`);
+      return;
+    }
 
     // Remove from date index
     const startKey = localDateToKey(existing.startDate);
@@ -122,27 +149,34 @@ export class EntryCache {
 
   /**
    * Gets all entries that appear on a specific date
-   * This includes single-day entries and multi-day entries spanning this date
+   * This includes single-day entries, multi-day entries spanning this date,
+   * and anniversary entries matching this month/day
    * @param date - The date to query
    * @returns Array of calendar entries
    */
   getEntriesForDate(date: LocalDate): readonly CalendarEntry[] {
     const key = localDateToKey(date);
+    const monthDayKey = this.monthDayKey(date.month, date.day);
+
     const singleDay = this.entriesByDate.get(key) ?? [];
     const multiDay = this.multiDayEntriesByDate.get(key) ?? [];
+    const anniversary = this.anniversaryEntriesByMonthDay.get(monthDayKey) ?? [];
 
-    if (singleDay.length > 0 || multiDay.length > 0) {
+    if (singleDay.length > 0 || multiDay.length > 0 || anniversary.length > 0) {
       this.stats.hits++;
     } else {
       this.stats.misses++;
     }
 
-    // Combine and deduplicate (multi-day entries might appear in both)
+    // Combine and deduplicate
     const combined = new Map<string, CalendarEntry>();
     for (const entry of singleDay) {
       combined.set(entry.id, entry);
     }
     for (const entry of multiDay) {
+      combined.set(entry.id, entry);
+    }
+    for (const entry of anniversary) {
       combined.set(entry.id, entry);
     }
 
