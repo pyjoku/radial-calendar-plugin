@@ -49,8 +49,10 @@ const CENTER_RADIUS = 140;
 
 // Annual View Layout (single year focus)
 const OUTER_RADIUS = 380;
-const INNER_RADIUS = 145;
-const MONTH_LABEL_RADIUS = 170;  // Inside the ring segments (between inner and outer)
+const LABEL_RING_WIDTH = 30;     // Reserved space for month labels
+const INNER_RADIUS = 145;        // Inner edge of label ring (start of center)
+const DATA_RING_INNER = INNER_RADIUS + LABEL_RING_WIDTH;  // Inner edge of data rings (175)
+const MONTH_LABEL_RADIUS = INNER_RADIUS + LABEL_RING_WIDTH / 2;  // Center of label ring (160)
 
 // Shared constants
 const DAY_RING_WIDTH = (OUTER_RADIUS - INNER_RADIUS) / 31;
@@ -1005,10 +1007,13 @@ export class RadialCalendarView extends ItemView {
       }
     }
 
-    // Render month separators (spanning all rings)
+    // Render month separators (spanning all rings including label ring)
     for (let month = 1; month <= 12; month++) {
       this.renderMonthSeparator(svg, this.monthToAngle(month));
     }
+
+    // Render separator circle between data rings and label ring
+    this.renderLabelRingSeparator(svg);
 
     // Render outer segments (ticks with labels)
     this.renderOuterSegments(svg, year);
@@ -1016,11 +1021,23 @@ export class RadialCalendarView extends ItemView {
     // Render center with year
     this.renderCenter(svg, year);
 
-    // Render month labels
+    // Render month labels (in dedicated label ring)
     this.renderMonthLabels(svg);
 
     // Render today marker
     this.renderTodayMarker(svg, year);
+  }
+
+  /**
+   * Renders a separator circle between data rings and the label ring
+   */
+  private renderLabelRingSeparator(svg: SVGSVGElement): void {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', String(CENTER));
+    circle.setAttribute('cy', String(CENTER));
+    circle.setAttribute('r', String(DATA_RING_INNER));
+    circle.setAttribute('class', 'rc-label-ring-separator');
+    svg.appendChild(circle);
   }
 
   /**
@@ -1062,22 +1079,23 @@ export class RadialCalendarView extends ItemView {
   /**
    * Calculates radii for each ring based on total number of enabled rings
    * Order 0 = outermost ring, higher orders = inner rings
+   * Data rings end at DATA_RING_INNER, leaving space for month labels
    */
   private calculateRingRadii(ringCount: number): Map<number, RingRadii> {
     const radiiMap = new Map<number, RingRadii>();
 
     if (ringCount === 0) return radiiMap;
 
-    // Available space for rings (excluding gaps)
+    // Available space for data rings (excluding gaps and label ring)
     const totalGapSpace = (ringCount - 1) * RING_GAP;
-    const availableSpace = OUTER_RADIUS - INNER_RADIUS - totalGapSpace;
+    const availableSpace = OUTER_RADIUS - DATA_RING_INNER - totalGapSpace;
     const ringWidth = Math.max(MIN_RING_WIDTH, availableSpace / ringCount);
 
     // Calculate radii for each ring order
     // Order 0 = outermost, so it starts at OUTER_RADIUS
     for (let order = 0; order < ringCount; order++) {
       const outerRadius = OUTER_RADIUS - (order * (ringWidth + RING_GAP));
-      const innerRadius = outerRadius - ringWidth;
+      const innerRadius = Math.max(DATA_RING_INNER, outerRadius - ringWidth);
 
       radiiMap.set(order, {
         outerRadius,

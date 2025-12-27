@@ -99,6 +99,14 @@
   opacity: 0.5;
 }
 
+/* Label Ring Separator (circle between data rings and month labels) */
+.rc-label-ring-separator {
+  fill: none;
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
 /* Day Arcs */
 .rc-day-arc {
   fill: var(--background-secondary);
