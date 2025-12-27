@@ -1156,6 +1156,7 @@ export class RadialCalendarView extends ItemView {
         name: 'Daily Notes',
         folder: dailyFolder,
         color: 'blue',
+        segmentType: 'daily',
         enabled: true,
         order: 0,
       });

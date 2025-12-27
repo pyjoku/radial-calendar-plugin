@@ -15,7 +15,7 @@ import { MultiDayEngine, BarPosition } from '../../core/engines/MultiDayEngine';
 import { createCalendarEntry, CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
 import { getToday } from '../../core/domain/models/LocalDate';
-import type { LinearCalendarSettings, LifePhase, RingColorName } from '../../core/domain/types';
+import type { LinearCalendarSettings, LifePhase, RingColorName, RenderedSegment } from '../../core/domain/types';
 import { createLocalDate } from '../../core/domain/models/LocalDate';
 
 /**
@@ -472,11 +472,11 @@ export class CalendarService {
       colorField: 'radcal-color',
       labelField: 'radcal-label',
     }
-  ): import('../../../core/domain/types').RenderedSegment[] {
+  ): RenderedSegment[] {
     if (!folder) return [];
 
     const files = this.vaultRepository.getAllMarkdownFiles();
-    const segments: import('../../../core/domain/types').RenderedSegment[] = [];
+    const segments: RenderedSegment[] = [];
 
     // Filter files in the specified folder
     const folderPrefix = folder.endsWith('/') ? folder : `${folder}/`;
@@ -683,7 +683,7 @@ export class CalendarService {
           fileName: fileInfo.name,
           displayName: fileInfo.basename,
           startDate: radcalFix,
-          endDate: undefined,
+          endDate: null,
           metadata: baseMetadata,
           isAnniversary: true,
         }));
@@ -703,7 +703,7 @@ export class CalendarService {
           fileName: fileInfo.name,
           displayName: fileInfo.basename,
           startDate: radcalStart,
-          endDate: undefined,
+          endDate: null,
           metadata: baseMetadata,
           isAnniversary: true,
         }));
@@ -717,7 +717,7 @@ export class CalendarService {
           fileName: fileInfo.name,
           displayName: fileInfo.basename,
           startDate: radcalEnd,
-          endDate: undefined,
+          endDate: null,
           metadata: baseMetadata,
           isAnniversary: true,
         }));
@@ -736,7 +736,7 @@ export class CalendarService {
             fileName: fileInfo.name,
             displayName: fileInfo.basename,
             startDate: propDate,
-            endDate: undefined,
+            endDate: null,
             metadata: baseMetadata,
             isAnniversary: true,
           }));
@@ -751,7 +751,7 @@ export class CalendarService {
           fileName: fileInfo.name,
           displayName: fileInfo.basename,
           startDate: start,
-          endDate: undefined,
+          endDate: null,
           metadata: baseMetadata,
           isAnniversary: true,
         }));
@@ -773,7 +773,7 @@ export class CalendarService {
       startDate: start,
       endDate: end,
       metadata: baseMetadata,
-      isAnniversary: undefined,
+      isAnniversary: false,
     })];
   }
 

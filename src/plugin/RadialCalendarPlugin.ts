@@ -161,7 +161,7 @@ export class RadialCalendarPlugin extends Plugin {
 
   private async activateLocalCalendarView(): Promise<void> {
     const { workspace } = this.app;
-    let leaf = workspace.getLeavesOfType(VIEW_TYPE_LOCAL_CALENDAR)[0];
+    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VIEW_TYPE_LOCAL_CALENDAR)[0] ?? null;
 
     if (!leaf) {
       // Open in right sidebar
