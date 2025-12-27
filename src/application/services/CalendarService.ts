@@ -249,11 +249,13 @@ export class CalendarService {
       endDateField: string;
       colorField: string;
       labelField: string;
+      categoryField: string;
     } = {
       startDateField: 'phase-start',
       endDateField: 'phase-end',
       colorField: 'phase-color',
       labelField: 'phase-label',
+      categoryField: 'phase-category',
     }
   ): LifePhase[] {
     if (!folder) return [];
@@ -294,12 +296,16 @@ export class CalendarService {
       // Get label (default to filename)
       const label = frontmatter[config.labelField] || fileInfo.basename;
 
+      // Get category (optional)
+      const category = frontmatter[config.categoryField];
+
       phases.push({
         filePath: fileInfo.path,
         label: String(label),
         startDate,
         endDate,
         color,
+        category: category ? String(category) : undefined,
       });
     }
 
@@ -342,55 +348,63 @@ export class CalendarService {
   /**
    * Converts life phases to rendered segments with angles
    *
-   * The life ring spans from birthYear to expectedEndYear.
+   * The life ring spans from birthDate to expectedEndDate.
    * Each phase is mapped to its angular position based on dates.
    *
    * @param phases - Array of life phases
-   * @param birthYear - Birth year
+   * @param birthYear - Birth year (fallback)
    * @param expectedLifespan - Expected lifespan in years
+   * @param birthDate - Optional precise birth date (YYYY-MM-DD)
    * @returns Array of rendered segments with angles
    */
   computeLifePhaseSegments(
     phases: LifePhase[],
     birthYear: number,
-    expectedLifespan: number
+    expectedLifespan: number,
+    birthDate?: string
   ): import('../../core/domain/types').RenderedSegment[] {
-    const expectedEndYear = birthYear + expectedLifespan;
-    const totalYears = expectedLifespan;
+    // Parse birth date or use Jan 1 of birth year
+    const birthLocalDate = birthDate
+      ? this.parseYAMLDate(birthDate) || createLocalDate(birthYear, 1, 1)
+      : createLocalDate(birthYear, 1, 1);
+
+    // Calculate total lifespan in days for precise angles
+    const expectedEndDate = createLocalDate(
+      birthLocalDate.year + expectedLifespan,
+      birthLocalDate.month,
+      birthLocalDate.day
+    );
+
+    const totalDays = this.daysBetweenDates(birthLocalDate, expectedEndDate);
 
     // Today for ongoing phases
     const today = getToday();
 
     return phases.map((phase) => {
-      // Calculate start angle (0 radians = right, will be rotated by createArcPath to 12 o'clock)
-      const startYearFraction = this.dateToYearFraction(phase.startDate);
-      const startYearsFromBirth = (phase.startDate.year - birthYear) + startYearFraction;
-      const startAngle = (startYearsFromBirth / totalYears) * 2 * Math.PI;
+      // Calculate days from birth to phase start
+      const daysToStart = this.daysBetweenDates(birthLocalDate, phase.startDate);
+      const startAngle = (daysToStart / totalDays) * 2 * Math.PI;
 
       // Calculate end angle
-      let endYearFraction: number;
       let endDate: LocalDate;
       let isOngoing = false;
 
       if (phase.endDate) {
         endDate = phase.endDate;
-        endYearFraction = this.dateToYearFraction(phase.endDate);
       } else {
         // Ongoing phase - extends to expected end
         isOngoing = true;
-        endDate = { year: expectedEndYear, month: 12, day: 31 };
-        endYearFraction = 1;
+        endDate = expectedEndDate;
       }
 
-      const endYearsFromBirth = (endDate.year - birthYear) + endYearFraction;
-      const endAngle = (endYearsFromBirth / totalYears) * 2 * Math.PI;
+      const daysToEnd = this.daysBetweenDates(birthLocalDate, endDate);
+      const endAngle = (daysToEnd / totalDays) * 2 * Math.PI;
 
       // Calculate today angle for ongoing phases
       let todayAngle: number | undefined;
       if (isOngoing) {
-        const todayYearFraction = this.dateToYearFraction(today);
-        const todayYearsFromBirth = (today.year - birthYear) + todayYearFraction;
-        todayAngle = (todayYearsFromBirth / totalYears) * 2 * Math.PI;
+        const daysToToday = this.daysBetweenDates(birthLocalDate, today);
+        todayAngle = (daysToToday / totalDays) * 2 * Math.PI;
       }
 
       // Get hex color
@@ -407,8 +421,18 @@ export class CalendarService {
         entries: [],
         isOngoing,
         todayAngle,
+        category: phase.category,
       };
     });
+  }
+
+  /**
+   * Calculates days between two dates
+   */
+  private daysBetweenDates(start: LocalDate, end: LocalDate): number {
+    const startMs = new Date(start.year, start.month - 1, start.day).getTime();
+    const endMs = new Date(end.year, end.month - 1, end.day).getTime();
+    return Math.floor((endMs - startMs) / (1000 * 60 * 60 * 24));
   }
 
   /**

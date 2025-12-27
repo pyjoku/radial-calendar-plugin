@@ -99,8 +99,36 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
     containerEl.createEl('h3', { text: 'Lebensansicht Einstellungen' });
 
     new Setting(containerEl)
-      .setName('Geburtsjahr')
-      .setDesc('Dein Geburtsjahr')
+      .setName('Geburtsdatum')
+      .setDesc('Dein Geburtsdatum (YYYY-MM-DD) für präzise Berechnung')
+      .addText((text) => {
+        text
+          .setPlaceholder('z.B. 1977-03-27')
+          .setValue(this.plugin.settings.birthDate || '')
+          .onChange(async (value) => {
+            // Validate date format
+            const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (match) {
+              const year = parseInt(match[1], 10);
+              const month = parseInt(match[2], 10);
+              const day = parseInt(match[3], 10);
+              if (year > 1900 && year <= new Date().getFullYear() &&
+                  month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                this.plugin.settings.birthDate = value;
+                this.plugin.settings.birthYear = year; // Keep in sync
+                await this.plugin.saveSettings();
+              }
+            } else if (value === '') {
+              // Allow clearing the date
+              this.plugin.settings.birthDate = undefined;
+              await this.plugin.saveSettings();
+            }
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Geburtsjahr (Fallback)')
+      .setDesc('Wird verwendet wenn kein vollständiges Datum angegeben')
       .addText((text) => {
         text
           .setPlaceholder('z.B. 1990')

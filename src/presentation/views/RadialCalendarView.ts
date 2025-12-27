@@ -303,6 +303,9 @@ export class RadialCalendarView extends ItemView {
     if (year === today.year) {
       this.renderTodayMarkerOnYearRing(svg);
     }
+
+    // 8. Birthday marker on year ring (if birthDate is set)
+    this.renderBirthdayMarkerOnYearRing(svg, year);
   }
 
   /**
@@ -368,6 +371,7 @@ export class RadialCalendarView extends ItemView {
 
   /**
    * Renders the life phases ring (middle ring with phases from folder)
+   * Phases are grouped by category, each category gets its own track band
    */
   private renderLifePhasesRing(svg: SVGSVGElement, birthYear: number, lifespan: number): void {
     if (!this.config) return;
@@ -379,19 +383,76 @@ export class RadialCalendarView extends ItemView {
     const phases = this.config.service.loadLifePhases(folder);
     if (phases.length === 0) return;
 
-    // Convert to rendered segments
-    const segments = this.config.service.computeLifePhaseSegments(phases, birthYear, lifespan);
+    // Convert to rendered segments (use birthDate if available for precision)
+    const birthDate = this.config.settings.birthDate;
+    const segments = this.config.service.computeLifePhaseSegments(phases, birthYear, lifespan, birthDate);
 
-    // Assign tracks for overlapping phases
-    const phasesWithTracks = assignTracks(segments);
-    const trackCount = getMaxTrackCount(phasesWithTracks);
+    // Group segments by category
+    const categories = new Map<string, typeof segments>();
+    const uncategorized: typeof segments = [];
+
+    for (const segment of segments) {
+      if (segment.category) {
+        const existing = categories.get(segment.category) || [];
+        existing.push(segment);
+        categories.set(segment.category, existing);
+      } else {
+        uncategorized.push(segment);
+      }
+    }
+
+    // Calculate total tracks needed: one per category + uncategorized overlap tracks
+    const categoryNames = Array.from(categories.keys()).sort();
+    const categoryCount = categoryNames.length;
+
+    // Uncategorized phases use track assignment for overlaps
+    const uncategorizedWithTracks = assignTracks(uncategorized);
+    const uncategorizedTrackCount = uncategorized.length > 0 ? getMaxTrackCount(uncategorizedWithTracks) : 0;
+
+    // Total tracks = categories + uncategorized overlap tracks
+    const totalTracks = categoryCount + uncategorizedTrackCount;
+    if (totalTracks === 0) return;
 
     // Create SVG defs for gradients
     const defs = this.getOrCreateDefs(svg);
 
-    // Render each phase
-    for (const phase of phasesWithTracks) {
-      this.renderLifePhaseArc(svg, defs, phase, trackCount);
+    // Render category-based phases (each category = one track)
+    categoryNames.forEach((categoryName, categoryIndex) => {
+      const categorySegments = categories.get(categoryName) || [];
+
+      // Within category, assign tracks for overlapping phases
+      const categoryWithTracks = assignTracks(categorySegments);
+      const categoryTrackCount = getMaxTrackCount(categoryWithTracks);
+
+      for (const phase of categoryWithTracks) {
+        // Calculate radii: category gets a band, overlaps within that band
+        const categoryBandOuter = LIFE_PHASES_RING_OUTER - (categoryIndex / totalTracks) * (LIFE_PHASES_RING_OUTER - LIFE_PHASES_RING_INNER);
+        const categoryBandInner = LIFE_PHASES_RING_OUTER - ((categoryIndex + 1) / totalTracks) * (LIFE_PHASES_RING_OUTER - LIFE_PHASES_RING_INNER);
+
+        const radii = computeSubRingRadii(
+          categoryBandOuter,
+          categoryBandInner,
+          categoryTrackCount,
+          phase.track
+        );
+
+        this.renderLifePhaseArcWithRadii(svg, defs, phase, radii);
+      }
+    });
+
+    // Render uncategorized phases in remaining space
+    for (const phase of uncategorizedWithTracks) {
+      const uncatBandOuter = LIFE_PHASES_RING_OUTER - (categoryCount / totalTracks) * (LIFE_PHASES_RING_OUTER - LIFE_PHASES_RING_INNER);
+      const uncatBandInner = LIFE_PHASES_RING_INNER;
+
+      const radii = computeSubRingRadii(
+        uncatBandOuter,
+        uncatBandInner,
+        uncategorizedTrackCount,
+        phase.track
+      );
+
+      this.renderLifePhaseArcWithRadii(svg, defs, phase, radii);
     }
   }
 
@@ -408,22 +469,14 @@ export class RadialCalendarView extends ItemView {
   }
 
   /**
-   * Renders a single life phase arc with optional gradient for ongoing phases
+   * Renders a single life phase arc with explicit radii
    */
-  private renderLifePhaseArc(
+  private renderLifePhaseArcWithRadii(
     svg: SVGSVGElement,
     defs: SVGDefsElement,
     phase: PhaseWithTrack,
-    trackCount: number
+    radii: { inner: number; outer: number }
   ): void {
-    // Calculate sub-ring radii based on track
-    const radii = computeSubRingRadii(
-      LIFE_PHASES_RING_OUTER,
-      LIFE_PHASES_RING_INNER,
-      trackCount,
-      phase.track
-    );
-
     // Create arc path
     const path = this.createArcPath(radii.inner, radii.outer, phase.startAngle, phase.endAngle);
 
@@ -768,6 +821,57 @@ export class RadialCalendarView extends ItemView {
     line.setAttribute('y2', String(y2));
     line.setAttribute('class', 'rc-today-marker');
     svg.appendChild(line);
+  }
+
+  /**
+   * Renders birthday marker on year ring (shows birthday position in current year)
+   */
+  private renderBirthdayMarkerOnYearRing(svg: SVGSVGElement, year: number): void {
+    if (!this.config) return;
+
+    const birthDate = this.config.settings.birthDate;
+    if (!birthDate) return;
+
+    // Parse birth date to get month and day
+    const match = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return;
+
+    const birthMonth = parseInt(match[2], 10);
+    const birthDay = parseInt(match[3], 10);
+
+    const daysInMonth = getDaysInMonth(year, birthMonth);
+    const startAngle = this.monthToAngle(birthMonth);
+    const monthArcSpan = Math.PI / 6;
+    const dayArcSpan = monthArcSpan / daysInMonth;
+    const birthdayAngle = startAngle + (birthDay - 0.5) * dayArcSpan - Math.PI / 2;
+
+    // Draw birthday marker (slightly different style from today marker)
+    const x1 = CENTER + (YEAR_RING_INNER - 3) * Math.cos(birthdayAngle);
+    const y1 = CENTER + (YEAR_RING_INNER - 3) * Math.sin(birthdayAngle);
+    const x2 = CENTER + (YEAR_RING_OUTER + 3) * Math.cos(birthdayAngle);
+    const y2 = CENTER + (YEAR_RING_OUTER + 3) * Math.sin(birthdayAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-birthday-marker');
+    svg.appendChild(line);
+
+    // Add small cake/star icon at the outer edge
+    const iconRadius = YEAR_RING_OUTER + 12;
+    const iconX = CENTER + iconRadius * Math.cos(birthdayAngle);
+    const iconY = CENTER + iconRadius * Math.sin(birthdayAngle);
+
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    icon.setAttribute('x', String(iconX));
+    icon.setAttribute('y', String(iconY));
+    icon.setAttribute('class', 'rc-birthday-icon');
+    icon.setAttribute('text-anchor', 'middle');
+    icon.setAttribute('dominant-baseline', 'central');
+    icon.textContent = '🎂';
+    svg.appendChild(icon);
   }
 
   /**

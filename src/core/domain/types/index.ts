@@ -582,6 +582,9 @@ export interface RenderedSegment {
 
   /** Track index for overlapping phases (0, 1, 2, ...) */
   track?: number;
+
+  /** Category for grouping (e.g., "Wohnorte", "Sport") */
+  category?: string;
 }
 
 /**
@@ -609,6 +612,9 @@ export interface LifePhase {
 
   /** Color name */
   color: RingColorName;
+
+  /** Category for grouping phases (e.g., "Wohnorte", "Sport", "Gesundheit") */
+  category?: string;
 }
 
 // Re-export CalendarEntry for RenderedSegment
@@ -635,8 +641,11 @@ export interface RadialCalendarSettings {
   /** Current view mode */
   currentView: RadialViewMode;
 
-  /** Birth year for life view */
+  /** Birth year for life view (legacy, use birthDate if available) */
   birthYear: number;
+
+  /** Full birth date for precise life view calculations (YYYY-MM-DD) */
+  birthDate?: string;
 
   /** Expected lifespan for life view */
   expectedLifespan: number;

@@ -354,6 +354,19 @@
   stroke-dasharray: 4 2;
 }
 
+/* Birthday Marker */
+.rc-birthday-marker {
+  stroke: #ec4899; /* pink */
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.rc-birthday-icon {
+  font-size: 12px;
+  pointer-events: none;
+}
+
 /* Life Acts */
 .rc-life-act {
   fill: var(--text-accent);
