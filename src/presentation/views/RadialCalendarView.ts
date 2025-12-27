@@ -986,23 +986,22 @@ export class RadialCalendarView extends ItemView {
     this.renderBackgroundCircle(svg);
 
     // Get enabled rings sorted by order (0 = outermost)
+    // This always includes Daily Notes ring if dailyNoteFolder is configured
     const enabledRings = this.getEnabledRingsSorted();
 
     if (enabledRings.length === 0) {
-      // No rings configured - render single ring with all entries (fallback)
-      for (let month = 1; month <= 12; month++) {
-        this.renderMonthSegment(svg, year, month);
-      }
-    } else {
-      // Calculate ring radii based on number of rings
-      const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
+      // No daily note folder configured and no rings - nothing to render
+      return;
+    }
 
-      // Render each ring
-      for (const ring of enabledRings) {
-        const radii = ringRadiiMap.get(ring.order);
-        if (radii) {
-          this.renderRing(svg, year, ring, radii);
-        }
+    // Calculate ring radii based on number of rings
+    const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
+
+    // Render each ring
+    for (const ring of enabledRings) {
+      const radii = ringRadiiMap.get(ring.order);
+      if (radii) {
+        this.renderRing(svg, year, ring, radii);
       }
     }
 
@@ -1026,13 +1025,38 @@ export class RadialCalendarView extends ItemView {
 
   /**
    * Gets enabled rings sorted by order (0 = outermost, higher = inner)
+   * Always includes Daily Notes ring as order 0 if dailyNoteFolder is configured
    */
   private getEnabledRingsSorted(): RingConfig[] {
     if (!this.config) return [];
 
-    return this.config.settings.rings
+    const rings: RingConfig[] = [];
+
+    // Always include Daily Notes ring as the outermost ring (order 0)
+    const dailyFolder = this.config.settings.dailyNoteFolder;
+    if (dailyFolder && dailyFolder.trim() !== '') {
+      rings.push({
+        id: '__daily_notes__',
+        name: 'Daily Notes',
+        folder: dailyFolder,
+        color: 'blue',
+        enabled: true,
+        order: 0,
+      });
+    }
+
+    // Add configured rings with adjusted order (shifted by 1 if Daily Notes exists)
+    const configuredRings = this.config.settings.rings
       .filter(ring => ring.enabled)
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => a.order - b.order)
+      .map((ring, index) => ({
+        ...ring,
+        order: rings.length > 0 ? index + 1 : index, // Shift order if Daily Notes exists
+      }));
+
+    rings.push(...configuredRings);
+
+    return rings;
   }
 
   /**
@@ -1879,7 +1903,20 @@ export class RadialCalendarView extends ItemView {
     // Render label if enabled
     if (showLabels) {
       // Position label in the middle of the segment
-      const midAngle = (startAngle + (segment.endDay > segment.startDay ? endAngle : endAngle - 2 * Math.PI)) / 2;
+      // For wrap-around segments (like winter), calculate midpoint correctly
+      let midAngle: number;
+      if (segment.endDay > segment.startDay) {
+        // Normal segment: just average the angles
+        midAngle = (startAngle + endAngle) / 2;
+      } else {
+        // Wrap-around segment: endAngle already has +2π, use it directly
+        midAngle = (startAngle + endAngle) / 2;
+        // Normalize if > 2π
+        if (midAngle > 2 * Math.PI) {
+          midAngle -= 2 * Math.PI;
+        }
+      }
+
       const labelAngle = midAngle - Math.PI / 2;
       const labelX = CENTER + SEGMENT_LABEL_RADIUS * Math.cos(labelAngle);
       const labelY = CENTER + SEGMENT_LABEL_RADIUS * Math.sin(labelAngle);
