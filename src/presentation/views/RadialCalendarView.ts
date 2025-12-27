@@ -992,13 +992,8 @@ export class RadialCalendarView extends ItemView {
     this.renderBackgroundCircle(svg);
 
     // Get enabled rings sorted by order (0 = outermost)
-    // This always includes Daily Notes ring if dailyNoteFolder is configured
+    // Always includes Daily Notes ring (shows all entries if no folder configured)
     const enabledRings = this.getEnabledRingsSorted();
-
-    if (enabledRings.length === 0) {
-      // No daily note folder configured and no rings - nothing to render
-      return;
-    }
 
     // Calculate ring radii based on number of rings
     const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
@@ -1142,6 +1137,7 @@ export class RadialCalendarView extends ItemView {
   /**
    * Gets enabled rings sorted by order (0 = outermost, higher = inner)
    * Always includes Daily Notes ring as order 0 if dailyNoteFolder is configured
+   * Falls back to showing all entries if no folder is configured
    */
   private getEnabledRingsSorted(): RingConfig[] {
     if (!this.config) return [];
@@ -1150,25 +1146,24 @@ export class RadialCalendarView extends ItemView {
 
     // Always include Daily Notes ring as the outermost ring (order 0)
     const dailyFolder = this.config.settings.dailyNoteFolder;
-    if (dailyFolder && dailyFolder.trim() !== '') {
-      rings.push({
-        id: '__daily_notes__',
-        name: 'Daily Notes',
-        folder: dailyFolder,
-        color: 'blue',
-        segmentType: 'daily',
-        enabled: true,
-        order: 0,
-      });
-    }
+    // Use the configured folder, or empty string to show ALL entries as fallback
+    rings.push({
+      id: '__daily_notes__',
+      name: 'Daily Notes',
+      folder: dailyFolder?.trim() || '', // Empty string = show all entries
+      color: 'blue',
+      segmentType: 'daily',
+      enabled: true,
+      order: 0,
+    });
 
-    // Add configured rings with adjusted order (shifted by 1 if Daily Notes exists)
+    // Add configured rings with adjusted order (shifted by 1 since Daily Notes always exists)
     const configuredRings = this.config.settings.rings
       .filter(ring => ring.enabled)
       .sort((a, b) => a.order - b.order)
       .map((ring, index) => ({
         ...ring,
-        order: rings.length > 0 ? index + 1 : index, // Shift order if Daily Notes exists
+        order: index + 1, // Always shift by 1 since Daily Notes is always order 0
       }));
 
     rings.push(...configuredRings);
