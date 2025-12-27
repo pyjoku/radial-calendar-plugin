@@ -76,6 +76,7 @@ export class RadialCalendarPlugin extends Plugin {
 
     // Register radcal codeblock processor
     const blockProcessor = new RadcalBlockProcessor(
+      this.app,
       this.service!,
       async (path: string) => {
         const file = this.app.vault.getAbstractFileByPath(path);

@@ -2,7 +2,7 @@
  * Parser for radcal codeblock configuration
  */
 
-import type { RadcalBlockConfig, RadcalRingConfig } from '../../core/domain/types/radcal-block';
+import type { RadcalBlockConfig, RadcalRingConfig, YamlFilter, FilterExpression } from '../../core/domain/types/radcal-block';
 import { DEFAULT_RADCAL_CONFIG } from '../../core/domain/types/radcal-block';
 import type { RingColorName } from '../../core/domain/types';
 
@@ -15,6 +15,9 @@ export function parseRadcalConfig(source: string): RadcalBlockConfig {
 
   let inRingsBlock = false;
   let inFoldersBlock = false;
+  let inFilterBlock = false;
+  let filterIndent = 0;
+  const filterLines: string[] = [];
   const rings: RadcalRingConfig[] = [];
   const folders: string[] = [];
   let currentRing: Partial<RadcalRingConfig> | null = null;
@@ -25,6 +28,19 @@ export function parseRadcalConfig(source: string): RadcalBlockConfig {
     // Skip empty lines and comments
     if (!trimmedLine || trimmedLine.startsWith('#')) {
       continue;
+    }
+
+    // Handle filter block (YAML structure)
+    if (inFilterBlock) {
+      const currentIndent = line.length - line.trimStart().length;
+      if (currentIndent > filterIndent || trimmedLine.startsWith('-')) {
+        filterLines.push(line);
+        continue;
+      } else {
+        // End of filter block
+        inFilterBlock = false;
+        config.filter = parseFilterYaml(filterLines);
+      }
     }
 
     // Check for list items in rings/folders blocks
@@ -128,8 +144,21 @@ export function parseRadcalConfig(source: string): RadcalBlockConfig {
           config.style = cleanValue;
         }
         break;
+      case 'dateProperty':
+        config.dateProperty = cleanValue;
+        break;
       case 'folder':
         config.folder = cleanValue;
+        break;
+      case 'filter':
+        if (cleanValue) {
+          // Inline filter string
+          config.filter = cleanValue;
+        } else {
+          // Start YAML filter block
+          inFilterBlock = true;
+          filterIndent = line.indexOf('filter');
+        }
         break;
       case 'showLabels':
         config.showLabels = cleanValue === 'true';
@@ -163,6 +192,11 @@ export function parseRadcalConfig(source: string): RadcalBlockConfig {
     });
   }
 
+  // Finalize filter block if still open
+  if (inFilterBlock && filterLines.length > 0) {
+    config.filter = parseFilterYaml(filterLines);
+  }
+
   // Apply collected arrays
   if (rings.length > 0) {
     config.rings = rings;
@@ -172,4 +206,75 @@ export function parseRadcalConfig(source: string): RadcalBlockConfig {
   }
 
   return config;
+}
+
+/**
+ * Parse YAML filter structure into FilterExpression
+ */
+function parseFilterYaml(lines: string[]): YamlFilter {
+  const result: YamlFilter = {};
+
+  let currentKey: 'and' | 'or' | 'not' | null = null;
+  const items: (string | YamlFilter)[] = [];
+  let nestedLines: string[] = [];
+  let nestedIndent = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const indent = line.length - line.trimStart().length;
+
+    // Check if we're collecting nested lines
+    if (nestedIndent >= 0) {
+      if (indent > nestedIndent) {
+        nestedLines.push(line);
+        continue;
+      } else {
+        // End of nested block
+        if (nestedLines.length > 0) {
+          items.push(parseFilterYaml(nestedLines));
+          nestedLines = [];
+        }
+        nestedIndent = -1;
+      }
+    }
+
+    // Check for key (and:, or:, not:)
+    if (trimmed === 'and:' || trimmed === 'or:' || trimmed === 'not:') {
+      // Save previous items
+      if (currentKey && items.length > 0) {
+        result[currentKey] = [...items];
+        items.length = 0;
+      }
+      currentKey = trimmed.slice(0, -1) as 'and' | 'or' | 'not';
+      continue;
+    }
+
+    // Check for list item
+    if (trimmed.startsWith('- ')) {
+      const value = trimmed.slice(2).trim();
+
+      // Check if it's a nested structure (and:, or:, not:)
+      if (value === 'and:' || value === 'or:' || value === 'not:') {
+        nestedIndent = indent;
+        nestedLines = [line];
+      } else {
+        // It's a filter string
+        items.push(value);
+      }
+    }
+  }
+
+  // Handle remaining nested lines
+  if (nestedLines.length > 0) {
+    items.push(parseFilterYaml(nestedLines));
+  }
+
+  // Save final items
+  if (currentKey && items.length > 0) {
+    result[currentKey] = items;
+  }
+
+  return result;
 }

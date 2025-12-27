@@ -4,13 +4,14 @@
  * Handles parsing, rendering, and live updates for radcal codeblocks
  */
 
-import { MarkdownRenderChild, MarkdownPostProcessorContext } from 'obsidian';
+import { MarkdownRenderChild, MarkdownPostProcessorContext, App, TFile } from 'obsidian';
 import type { CalendarService } from '../../application/services/CalendarService';
 import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
 import { createLocalDate, getDaysInMonth, isLeapYear } from '../../core/domain/models/LocalDate';
 import { parseRadcalConfig } from './RadcalConfigParser';
 import { RadcalRenderer, EntriesByDate } from './RadcalRenderer';
+import { RadcalFilterEngine } from './RadcalFilterEngine';
 import type { RadcalBlockConfig } from '../../core/domain/types/radcal-block';
 
 /**
@@ -18,14 +19,17 @@ import type { RadcalBlockConfig } from '../../core/domain/types/radcal-block';
  */
 class RadcalRenderChild extends MarkdownRenderChild {
   private unsubscribe: (() => void) | null = null;
+  private readonly filterEngine: RadcalFilterEngine;
 
   constructor(
     containerEl: HTMLElement,
+    private readonly app: App,
     private readonly service: CalendarService,
     private readonly config: RadcalBlockConfig,
     private readonly openFile: (path: string) => Promise<void>
   ) {
     super(containerEl);
+    this.filterEngine = new RadcalFilterEngine(app);
   }
 
   onload(): void {
@@ -76,9 +80,13 @@ class RadcalRenderChild extends MarkdownRenderChild {
 
   private loadFilteredEntries(year: number): EntriesByDate {
     const result = new Map<string, CalendarEntry[]>();
-    const daysInYear = isLeapYear(year) ? 366 : 365;
 
-    // Build date-to-entries map for the year
+    // If dateProperty is set, load files directly and use that property
+    if (this.config.dateProperty) {
+      return this.loadEntriesByProperty(year);
+    }
+
+    // Standard mode: use CalendarService entries
     for (let month = 1; month <= 12; month++) {
       const daysInMonth = getDaysInMonth(year, month);
       for (let day = 1; day <= daysInMonth; day++) {
@@ -87,8 +95,19 @@ class RadcalRenderChild extends MarkdownRenderChild {
 
         let entries = [...this.service.getEntriesForDate(date)];
 
-        // Apply folder filter if specified
-        if (this.config.folder) {
+        // Apply Bases-compatible filter if specified
+        if (this.config.filter) {
+          entries = entries.filter(entry => {
+            const file = this.app.vault.getAbstractFileByPath(entry.filePath);
+            if (!(file instanceof TFile)) return false;
+
+            const context = this.filterEngine.createContext(file);
+            return this.filterEngine.evaluate(this.config.filter!, context);
+          });
+        }
+
+        // Legacy: Apply folder filter if specified (deprecated)
+        if (!this.config.filter && this.config.folder) {
           const folderFilter = this.config.folder;
           entries = entries.filter(e =>
             e.metadata.folder === folderFilter ||
@@ -96,8 +115,8 @@ class RadcalRenderChild extends MarkdownRenderChild {
           );
         }
 
-        // Apply folders filter if specified
-        if (this.config.folders && this.config.folders.length > 0) {
+        // Legacy: Apply folders filter if specified (deprecated)
+        if (!this.config.filter && this.config.folders && this.config.folders.length > 0) {
           const foldersFilter = this.config.folders;
           entries = entries.filter(e =>
             foldersFilter.some(f =>
@@ -114,6 +133,101 @@ class RadcalRenderChild extends MarkdownRenderChild {
     }
 
     return result;
+  }
+
+  /**
+   * Load entries using a specific dateProperty from frontmatter
+   */
+  private loadEntriesByProperty(year: number): EntriesByDate {
+    const result = new Map<string, CalendarEntry[]>();
+    const propName = this.config.dateProperty!;
+
+    // Get all markdown files
+    const files = this.app.vault.getMarkdownFiles();
+
+    for (const file of files) {
+      // Apply filter if specified
+      if (this.config.filter) {
+        const context = this.filterEngine.createContext(file);
+        if (!this.filterEngine.evaluate(this.config.filter, context)) {
+          continue;
+        }
+      }
+
+      // Get frontmatter
+      const cache = this.app.metadataCache.getFileCache(file);
+      const frontmatter = cache?.frontmatter;
+      if (!frontmatter) continue;
+
+      // Get date from property
+      const dateValue = frontmatter[propName];
+      if (!dateValue) continue;
+
+      // Parse date
+      const parsedDate = this.parseDate(dateValue);
+      if (!parsedDate) continue;
+
+      // Check if in target year
+      if (parsedDate.year !== year) continue;
+
+      // Create date key
+      const dateKey = `${parsedDate.year}-${String(parsedDate.month).padStart(2, '0')}-${String(parsedDate.day).padStart(2, '0')}`;
+
+      // Create a simple entry object
+      const entry: CalendarEntry = {
+        id: file.path,
+        filePath: file.path,
+        fileName: file.name,
+        displayName: file.basename,
+        startDate: parsedDate,
+        endDate: null,
+        isMultiDay: false,
+        isAnniversary: false,
+        metadata: {
+          tags: [],
+          folder: file.parent?.path ?? '',
+          properties: {},
+        },
+      };
+
+      // Add to result
+      if (!result.has(dateKey)) {
+        result.set(dateKey, []);
+      }
+      result.get(dateKey)!.push(entry);
+    }
+
+    return result;
+  }
+
+  /**
+   * Parse a date value from frontmatter
+   */
+  private parseDate(value: unknown): LocalDate | null {
+    if (!value) return null;
+
+    // Handle Date object
+    if (value instanceof Date) {
+      return createLocalDate(
+        value.getFullYear(),
+        value.getMonth() + 1,
+        value.getDate()
+      );
+    }
+
+    // Handle string (YYYY-MM-DD or similar)
+    if (typeof value === 'string') {
+      const match = value.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return createLocalDate(
+          parseInt(match[1], 10),
+          parseInt(match[2], 10),
+          parseInt(match[3], 10)
+        );
+      }
+    }
+
+    return null;
   }
 
   private handleDayClick(date: LocalDate, entries: CalendarEntry[]): void {
@@ -151,6 +265,7 @@ class RadcalRenderChild extends MarkdownRenderChild {
  */
 export class RadcalBlockProcessor {
   constructor(
+    private readonly app: App,
     private readonly service: CalendarService,
     private readonly openFile: (path: string) => Promise<void>
   ) {}
@@ -173,6 +288,7 @@ export class RadcalBlockProcessor {
       // Create render child for lifecycle management and live updates
       const renderChild = new RadcalRenderChild(
         container,
+        this.app,
         this.service,
         config,
         this.openFile

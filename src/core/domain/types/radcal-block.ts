@@ -5,6 +5,20 @@
 import type { RingColorName } from './index';
 
 /**
+ * YAML filter structure (recursive)
+ */
+export interface YamlFilter {
+  and?: (string | YamlFilter)[];
+  or?: (string | YamlFilter)[];
+  not?: (string | YamlFilter)[];
+}
+
+/**
+ * Filter expression - string or YAML structure
+ */
+export type FilterExpression = string | YamlFilter;
+
+/**
  * Configuration for a radcal codeblock
  */
 export interface RadcalBlockConfig {
@@ -12,7 +26,15 @@ export interface RadcalBlockConfig {
   year?: number;
   style: 'annual' | 'life';
 
-  // Filter
+  // Date property to use for positioning entries
+  // Examples: "created", "date", "published", "Birthday"
+  // Default: uses the entry's existing date (from CalendarService)
+  dateProperty?: string;
+
+  // Filter (Bases-compatible)
+  filter?: FilterExpression;
+
+  // Legacy filter (deprecated, use filter instead)
   folder?: string;
   folders?: string[];
 
