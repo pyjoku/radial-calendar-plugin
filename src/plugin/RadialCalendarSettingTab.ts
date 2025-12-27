@@ -336,6 +336,7 @@ Birthday: 1982-09-24<br>
               syncIntervalMinutes: 0,
               enabled: true,
               showAsRing: true,
+              showSpanningArcs: true,
             };
             if (!this.plugin.settings.calendarSources) {
               this.plugin.settings.calendarSources = [];
@@ -501,6 +502,19 @@ Birthday: 1982-09-24<br>
           .setValue(source.showAsRing ?? true)
           .onChange(async (value) => {
             source.showAsRing = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    // Spanning Arcs toggle
+    new Setting(sourceContainer)
+      .setName('Spanning Arcs')
+      .setDesc('Show multi-day events as continuous arcs')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(source.showSpanningArcs ?? true)
+          .onChange(async (value) => {
+            source.showSpanningArcs = value;
             await this.plugin.saveSettings();
           });
       });

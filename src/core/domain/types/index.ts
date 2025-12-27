@@ -760,6 +760,9 @@ export interface CalendarSourceConfig {
   /** Show as ring in annual view */
   showAsRing: boolean;
 
+  /** Show multi-day events as spanning arcs */
+  showSpanningArcs: boolean;
+
   /** Last sync timestamp */
   lastSync?: number;
 }

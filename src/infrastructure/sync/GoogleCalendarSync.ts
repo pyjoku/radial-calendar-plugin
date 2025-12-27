@@ -303,6 +303,7 @@ export function createDefaultCalendarSource(): CalendarSourceConfig {
     syncIntervalMinutes: 0,
     enabled: true,
     showAsRing: true,
+    showSpanningArcs: true,
   };
 }
 

@@ -1172,6 +1172,12 @@ export class RadialCalendarView extends ItemView {
         segmentType: 'daily' as const,
         enabled: true,
         order: rings.length + index,
+        // Spanning arcs for multi-day events
+        showSpanningArcs: source.showSpanningArcs !== false,
+        startDateField: 'radcal-start',
+        endDateField: 'radcal-end',
+        colorField: 'radcal-color',
+        labelField: 'radcal-label',
       }));
 
     rings.push(...calendarRings);
