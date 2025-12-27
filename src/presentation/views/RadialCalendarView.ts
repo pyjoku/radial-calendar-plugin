@@ -734,6 +734,10 @@ export class RadialCalendarView extends ItemView {
     }
 
     // Month labels inside year ring
+    // Font size relative to year ring (10% of ring width)
+    const yearRingWidth = YEAR_RING_OUTER - YEAR_RING_INNER;
+    const fontSize = yearRingWidth * 0.1;
+
     for (let month = 0; month < 12; month++) {
       const angle = this.monthToAngle(month + 1) + (Math.PI / 12) - Math.PI / 2;
       const labelRadius = YEAR_RING_INNER - 15;
@@ -746,6 +750,7 @@ export class RadialCalendarView extends ItemView {
       text.setAttribute('class', 'rc-month-label');
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('dominant-baseline', 'central');
+      text.style.fontSize = `${fontSize}px`;
       text.textContent = MONTH_NAMES[month];
       svg.appendChild(text);
     }
@@ -1676,6 +1681,9 @@ export class RadialCalendarView extends ItemView {
   }
 
   private renderMonthLabels(svg: SVGSVGElement): void {
+    // Font size relative to label ring width (40% of ring width)
+    const fontSize = LABEL_RING_WIDTH * 0.4;
+
     for (let month = 0; month < 12; month++) {
       const angle = this.monthToAngle(month + 1) + (Math.PI / 12); // Center of month
       const x = CENTER + MONTH_LABEL_RADIUS * Math.cos(angle - Math.PI / 2);
@@ -1687,6 +1695,7 @@ export class RadialCalendarView extends ItemView {
       text.setAttribute('class', 'rc-month-label');
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('dominant-baseline', 'central');
+      text.style.fontSize = `${fontSize}px`;
       text.textContent = MONTH_NAMES[month];
       svg.appendChild(text);
     }
