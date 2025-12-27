@@ -241,16 +241,42 @@ class RadcalRenderChild extends MarkdownRenderChild {
   }
 
   private setupTooltips(svg: SVGSVGElement, tooltipEl: HTMLElement, year: number): void {
-    const arcs = svg.querySelectorAll('.rc-day-arc');
+    const arcs = svg.querySelectorAll('.rc-day-arc[data-date]');
 
     arcs.forEach((arc) => {
       arc.addEventListener('mouseenter', (e) => {
         const event = e as MouseEvent;
-        // Extract date from arc position (simplified - could be improved)
-        // For now, just show basic tooltip
+        const target = e.target as SVGElement;
+
+        // Get data from attributes
+        const dateStr = target.getAttribute('data-date') || '';
+        const count = target.getAttribute('data-count') || '0';
+        const names = target.getAttribute('data-names')?.split('|') || [];
+
+        // Format date
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const dateFormatted = `${d}.${m}.${y}`;
+
+        // Build tooltip content
+        let content = `<div class="radcal-tooltip-date">${dateFormatted}</div>`;
+        if (names.length > 0) {
+          content += '<div class="radcal-tooltip-entries">';
+          for (const name of names.slice(0, 5)) {
+            content += `<div class="radcal-tooltip-entry">${name}</div>`;
+          }
+          if (names.length > 5) {
+            content += `<div class="radcal-tooltip-more">+${names.length - 5} more</div>`;
+          }
+          content += '</div>';
+        }
+
+        tooltipEl.innerHTML = content;
         tooltipEl.style.display = 'block';
-        tooltipEl.style.left = `${event.offsetX + 10}px`;
-        tooltipEl.style.top = `${event.offsetY + 10}px`;
+
+        // Position relative to container
+        const rect = this.containerEl.getBoundingClientRect();
+        tooltipEl.style.left = `${event.clientX - rect.left + 15}px`;
+        tooltipEl.style.top = `${event.clientY - rect.top + 15}px`;
       });
 
       arc.addEventListener('mouseleave', () => {

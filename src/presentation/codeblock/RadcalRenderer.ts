@@ -180,6 +180,11 @@ export class RadcalRenderer {
           arc.style.opacity = String(Math.min(0.3 + dayEntries.length * 0.15, 1));
           arc.style.cursor = 'pointer';
 
+          // Add data attributes for tooltip
+          arc.setAttribute('data-date', dateKey);
+          arc.setAttribute('data-count', String(dayEntries.length));
+          arc.setAttribute('data-names', dayEntries.map(e => e.displayName).join('|'));
+
           if (onDayClick) {
             const clickDate = date;
             const clickEntries = dayEntries;
