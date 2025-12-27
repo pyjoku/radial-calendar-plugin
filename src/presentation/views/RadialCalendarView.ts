@@ -56,7 +56,7 @@ const MONTH_LABEL_RADIUS = INNER_RADIUS + LABEL_RING_WIDTH / 2;  // Center of la
 
 // Shared constants
 const DAY_RING_WIDTH = (OUTER_RADIUS - INNER_RADIUS) / 31;
-const RING_GAP = 4;
+const RING_GAP = 1;
 const MIN_RING_WIDTH = 20;
 
 // Outer segment constants

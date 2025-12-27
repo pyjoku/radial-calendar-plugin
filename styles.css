@@ -278,6 +278,7 @@
 /* Ring-specific arc styling */
 .rc-ring-arc {
   fill-opacity: 0.6;
+  stroke: var(--background-modifier-border);
   stroke-width: 0.5;
   cursor: pointer;
   transition: fill-opacity 0.15s ease;
