@@ -31,6 +31,7 @@ export class RadialCalendarPlugin extends Plugin {
       dailyNoteFolder: this.settings.dailyNoteFolder,
       showMultiDayBars: true,
       showWeekendHighlight: true,
+      anniversaryDateProperties: this.settings.anniversaryDateProperties || [],
     };
     this.service = new CalendarService(this.app, legacySettings);
     await this.service.initialize();

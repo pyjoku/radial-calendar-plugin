@@ -743,6 +743,20 @@ export class CalendarService {
         }
       }
 
+      // Fallback: if no specific anniversary date found, use normal start date
+      if (entries.length === 0 && start) {
+        entries.push(createCalendarEntry({
+          id: `${fileInfo.path}#fallback`,
+          filePath: fileInfo.path,
+          fileName: fileInfo.name,
+          displayName: fileInfo.basename,
+          startDate: start,
+          endDate: undefined,
+          metadata: baseMetadata,
+          isAnniversary: true,
+        }));
+      }
+
       return entries;
     }
 
@@ -833,12 +847,26 @@ export class CalendarService {
       this.entryCache.removeEntry(`${filePath}#start`);
       this.entryCache.removeEntry(`${filePath}#end`);
       this.entryCache.removeEntry(`${filePath}#fix`);
+      this.entryCache.removeEntry(`${filePath}#fallback`);
+      // Also remove any custom property entries
+      const additionalProps = this.settings.anniversaryDateProperties || [];
+      for (const propName of additionalProps) {
+        const propId = propName.toLowerCase().replace(/\s+/g, '-');
+        this.entryCache.removeEntry(`${filePath}#${propId}`);
+      }
     } else {
       // File was added or modified - remove old entries first
       this.entryCache.removeEntry(filePath);
       this.entryCache.removeEntry(`${filePath}#start`);
       this.entryCache.removeEntry(`${filePath}#end`);
       this.entryCache.removeEntry(`${filePath}#fix`);
+      this.entryCache.removeEntry(`${filePath}#fallback`);
+      // Also remove any custom property entries
+      const additionalProps = this.settings.anniversaryDateProperties || [];
+      for (const propName of additionalProps) {
+        const propId = propName.toLowerCase().replace(/\s+/g, '-');
+        this.entryCache.removeEntry(`${filePath}#${propId}`);
+      }
 
       // Add new entries
       const config = this.getDateExtractionConfig();
