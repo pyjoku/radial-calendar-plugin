@@ -799,6 +799,8 @@ export class RadialCalendarView extends ItemView {
 
   /**
    * Renders position marker on life ring
+   * For 'today' type: shows exact position including day-of-year progress
+   * For 'viewed' type: shows position at start of the year
    */
   private renderLifePositionMarker(
     svg: SVGSVGElement,
@@ -807,7 +809,26 @@ export class RadialCalendarView extends ItemView {
     year: number,
     type: 'today' | 'viewed'
   ): void {
-    const age = year - birthYear;
+    let age = year - birthYear;
+
+    // For today marker, add fractional year progress based on day-of-year
+    if (type === 'today') {
+      const today = getToday();
+      const isLeapYear = (today.year % 4 === 0 && today.year % 100 !== 0) || (today.year % 400 === 0);
+      const daysInYear = isLeapYear ? 366 : 365;
+
+      // Calculate day of year (1-365/366)
+      const monthDays = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      if (isLeapYear) monthDays[2] = 29;
+      let dayOfYear = today.day;
+      for (let m = 1; m < today.month; m++) {
+        dayOfYear += monthDays[m];
+      }
+
+      // Add fractional progress through the year
+      age += dayOfYear / daysInYear;
+    }
+
     const angle = (age / lifespan) * 2 * Math.PI - Math.PI / 2;
 
     const innerR = LIFE_RING_INNER - 5;
