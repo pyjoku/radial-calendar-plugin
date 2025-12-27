@@ -272,6 +272,18 @@ export class RadialCalendarBasesView extends BasesView {
       }
     }
 
+    // Try to extract date from filename (e.g., "2022-04-19 Meeting Notes")
+    if (entry.file?.basename) {
+      const filenameMatch = entry.file.basename.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (filenameMatch) {
+        return new Date(
+          parseInt(filenameMatch[1]),
+          parseInt(filenameMatch[2]) - 1,
+          parseInt(filenameMatch[3])
+        );
+      }
+    }
+
     // Fallback: use file creation date
     if (entry.file?.stat?.ctime) {
       return new Date(entry.file.stat.ctime);
