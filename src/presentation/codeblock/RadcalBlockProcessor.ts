@@ -74,13 +74,29 @@ class RadcalRenderChild extends MarkdownRenderChild {
       attr: { 'aria-label': 'Edit source' }
     });
     editBtn.innerHTML = '&lt;/&gt;';
+
+    const switchToEdit = () => {
+      // @ts-ignore - commands exists on app
+      this.app.commands.executeCommandById('markdown:toggle-preview');
+    };
+
     editBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      switchToEdit();
+    });
 
-      // Use Obsidian's built-in command to toggle edit mode
-      // @ts-ignore - commands exists on app
-      this.app.commands.executeCommandById('markdown:toggle-preview');
+    // Double-click on container background switches to edit mode (like native codeblocks)
+    this.containerEl.addEventListener('dblclick', (e) => {
+      const target = e.target as HTMLElement;
+      // Only trigger if clicking on container background, not on interactive elements
+      if (target.classList.contains('radcal-block') ||
+          target.classList.contains('radcal-block-content') ||
+          target.tagName === 'svg') {
+        e.preventDefault();
+        e.stopPropagation();
+        switchToEdit();
+      }
     });
 
     // Add tooltip element
