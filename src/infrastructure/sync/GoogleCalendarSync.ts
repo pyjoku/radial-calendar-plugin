@@ -277,16 +277,37 @@ export class GoogleCalendarSync {
       lines.push('');
     }
 
-    // Description
+    // Description (sanitized to remove HTML)
     if (event.description) {
       lines.push('## Beschreibung');
       lines.push('');
-      lines.push(event.description);
+      lines.push(sanitizeDescription(event.description));
       lines.push('');
     }
 
     return lines.join('\n');
   }
+}
+
+/**
+ * Sanitize HTML content from calendar descriptions
+ * Strips HTML tags while preserving basic text formatting
+ */
+function sanitizeDescription(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')     // <br> → Newline
+    .replace(/<\/p>/gi, '\n\n')        // </p> → Paragraph break
+    .replace(/<\/li>/gi, '\n')         // </li> → Newline
+    .replace(/<li>/gi, '- ')           // <li> → List item
+    .replace(/<[^>]*>/g, '')           // Remove all other HTML tags
+    .replace(/&nbsp;/g, ' ')           // HTML entities
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')        // Collapse multiple newlines
+    .trim();
 }
 
 /**

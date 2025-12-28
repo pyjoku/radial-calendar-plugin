@@ -24,3 +24,10 @@ coverage/
 # Temp files
 *.tmp
 *.temp
+
+# Claude Code Framework (Intellectual Property)
+CLAUDE.md
+specs/
+skills/
+.archive/
+.claude/
