@@ -1436,3 +1436,147 @@
   padding: 8px 16px 16px;
   border-top: 1px solid var(--background-modifier-border);
 }
+
+/* Collapsible Preset Configuration */
+.radcal-preset-details {
+  margin-bottom: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  overflow: hidden;
+}
+
+.radcal-preset-details[open] {
+  background: var(--background-primary);
+}
+
+.radcal-preset-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: var(--text-normal);
+  list-style: none;
+}
+
+.radcal-preset-summary::-webkit-details-marker {
+  display: none;
+}
+
+.radcal-preset-summary::before {
+  content: '▶';
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.radcal-preset-details[open] .radcal-preset-summary::before {
+  transform: rotate(90deg);
+}
+
+.radcal-preset-summary:hover {
+  background: var(--background-modifier-hover);
+}
+
+.radcal-preset-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+  text-align: center;
+  line-height: 18px;
+}
+
+.radcal-preset-title {
+  flex-grow: 1;
+}
+
+.radcal-preset-name-badge {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-family: var(--font-monospace);
+}
+
+.radcal-preset-content {
+  padding: 8px 16px 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Collapsible Calendar Source Configuration */
+.radcal-calendar-details {
+  margin-bottom: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  overflow: hidden;
+}
+
+.radcal-calendar-details[open] {
+  background: var(--background-primary);
+}
+
+.radcal-calendar-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: var(--text-normal);
+  list-style: none;
+}
+
+.radcal-calendar-summary::-webkit-details-marker {
+  display: none;
+}
+
+.radcal-calendar-summary::before {
+  content: '▶';
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.radcal-calendar-details[open] .radcal-calendar-summary::before {
+  transform: rotate(90deg);
+}
+
+.radcal-calendar-summary:hover {
+  background: var(--background-modifier-hover);
+}
+
+.radcal-calendar-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.radcal-calendar-title {
+  flex-grow: 1;
+}
+
+.radcal-calendar-folder {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.radcal-calendar-status {
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.radcal-calendar-content {
+  padding: 8px 16px 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}

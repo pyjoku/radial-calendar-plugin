@@ -465,30 +465,42 @@ Birthday: 1982-09-24<br>
   }
 
   /**
-   * Creates settings for a single calendar source
+   * Creates settings for a single calendar source (collapsible)
    */
   private createCalendarSourceSettings(
     containerEl: HTMLElement,
     source: CalendarSourceConfig,
     index: number
   ): void {
-    const sourceContainer = containerEl.createDiv({ cls: 'radial-calendar-source-config' });
+    // Use native <details> for collapsible behavior
+    const details = containerEl.createEl('details', { cls: 'radcal-calendar-details' });
 
-    // Header with name and delete button
-    new Setting(sourceContainer)
-      .setName(`Calendar ${index + 1}: ${source.name}`)
-      .setHeading()
-      .addButton((button) => {
-        button
-          .setIcon('trash')
-          .setWarning()
-          .setTooltip('Delete this calendar source')
-          .onClick(async () => {
-            this.plugin.settings.calendarSources.splice(index, 1);
-            await this.plugin.saveSettings();
-            this.display();
-          });
-      });
+    // Summary (clickable header)
+    const summary = details.createEl('summary', { cls: 'radcal-calendar-summary' });
+
+    // Color swatch
+    const colorSwatch = summary.createSpan({ cls: 'radcal-calendar-swatch' });
+    colorSwatch.style.backgroundColor = RING_COLORS[source.color];
+
+    // Calendar name
+    const titleEl = summary.createSpan({
+      text: source.name || `Calendar ${index + 1}`,
+      cls: 'radcal-calendar-title'
+    });
+
+    // Folder info
+    if (source.folder) {
+      summary.createSpan({ text: ` — ${source.folder}`, cls: 'radcal-calendar-folder' });
+    }
+
+    // Status indicator
+    const statusEl = summary.createSpan({ cls: 'radcal-calendar-status' });
+    statusEl.textContent = source.enabled ? '●' : '○';
+    statusEl.style.color = source.enabled ? 'var(--text-success)' : 'var(--text-muted)';
+    statusEl.setAttribute('title', source.enabled ? 'Enabled' : 'Disabled');
+
+    // Content container
+    const sourceContainer = details.createDiv({ cls: 'radcal-calendar-content' });
 
     // Name
     new Setting(sourceContainer)
@@ -501,6 +513,7 @@ Birthday: 1982-09-24<br>
           .onChange(async (value) => {
             source.name = value;
             await this.plugin.saveSettings();
+            titleEl.textContent = value || `Calendar ${index + 1}`;
           });
       });
 
@@ -516,9 +529,8 @@ Birthday: 1982-09-24<br>
             source.url = value;
             await this.plugin.saveSettings();
           });
-        // Make URL field wider
         text.inputEl.style.width = '100%';
-        text.inputEl.type = 'password'; // Hide URL for privacy
+        text.inputEl.type = 'password';
       });
 
     // Target folder
@@ -532,6 +544,10 @@ Birthday: 1982-09-24<br>
           .onChange(async (value) => {
             source.folder = value;
             await this.plugin.saveSettings();
+            const folderEl = summary.querySelector('.radcal-calendar-folder');
+            if (folderEl) {
+              folderEl.textContent = value ? ` — ${value}` : '';
+            }
           });
         new FolderSuggest(this.app, text.inputEl);
       });
@@ -539,16 +555,31 @@ Birthday: 1982-09-24<br>
     // Color
     new Setting(sourceContainer)
       .setName('Color')
-      .setDesc('Color for this calendar in the radial view')
       .addDropdown((dropdown) => {
         Object.keys(RING_COLORS).forEach((colorName) => {
-          dropdown.addOption(colorName, colorName.charAt(0).toUpperCase() + colorName.slice(1));
+          dropdown.addOption(colorName, this.formatColorName(colorName));
         });
         dropdown
           .setValue(source.color)
           .onChange(async (value) => {
             source.color = value as RingColorName;
             await this.plugin.saveSettings();
+            colorSwatch.style.backgroundColor = RING_COLORS[value as RingColorName];
+          });
+      });
+
+    // Enabled toggle
+    new Setting(sourceContainer)
+      .setName('Enabled')
+      .setDesc('Enable or disable this calendar source')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(source.enabled)
+          .onChange(async (value) => {
+            source.enabled = value;
+            await this.plugin.saveSettings();
+            statusEl.textContent = value ? '●' : '○';
+            statusEl.style.color = value ? 'var(--text-success)' : 'var(--text-muted)';
           });
       });
 
@@ -584,19 +615,6 @@ Birthday: 1982-09-24<br>
           });
       });
 
-    // Enabled toggle
-    new Setting(sourceContainer)
-      .setName('Enabled')
-      .setDesc('Enable or disable this calendar source')
-      .addToggle((toggle) => {
-        toggle
-          .setValue(source.enabled)
-          .onChange(async (value) => {
-            source.enabled = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
     // Show as Ring toggle
     new Setting(sourceContainer)
       .setName('Show as Ring')
@@ -626,15 +644,24 @@ Birthday: 1982-09-24<br>
     // Last sync info
     if (source.lastSync) {
       const lastSyncDate = new Date(source.lastSync);
-      const lastSyncStr = lastSyncDate.toLocaleString();
       sourceContainer.createDiv({
         cls: 'setting-item-description',
-        text: `Last synced: ${lastSyncStr}`,
+        text: `Last synced: ${lastSyncDate.toLocaleString()}`,
       });
     }
 
-    // Divider
-    sourceContainer.createEl('hr');
+    // Delete button
+    new Setting(sourceContainer)
+      .addButton((button) => {
+        button
+          .setButtonText('Delete Calendar')
+          .setWarning()
+          .onClick(async () => {
+            this.plugin.settings.calendarSources.splice(index, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
   }
 
   /**
@@ -1478,48 +1505,40 @@ Birthday: 1982-09-24<br>
   }
 
   /**
-   * Creates settings for a single preset
+   * Creates settings for a single preset (collapsible)
    */
   private createPresetSettings(
     containerEl: HTMLElement,
     preset: PresetConfig,
     index: number
   ): void {
-    const presetContainer = containerEl.createDiv({ cls: 'radcal-preset-config' });
+    // Use native <details> for collapsible behavior
+    const details = containerEl.createEl('details', { cls: 'radcal-preset-details' });
 
-    // Header with preview
-    const headerSetting = new Setting(presetContainer)
-      .setName(`Preset: ${preset.label || preset.name}`)
-      .setHeading();
+    // Summary (clickable header)
+    const summary = details.createEl('summary', { cls: 'radcal-preset-summary' });
 
-    // Preview swatch
-    const previewSwatch = headerSetting.nameEl.createSpan({ cls: 'radcal-preset-preview' });
-    previewSwatch.style.backgroundColor = RING_COLORS[preset.color];
-    previewSwatch.style.width = '16px';
-    previewSwatch.style.height = '16px';
-    previewSwatch.style.borderRadius = '3px';
-    previewSwatch.style.display = 'inline-block';
-    previewSwatch.style.marginLeft = '8px';
-    previewSwatch.style.verticalAlign = 'middle';
+    // Color swatch with icon
+    const colorSwatch = summary.createSpan({ cls: 'radcal-preset-swatch' });
+    colorSwatch.style.backgroundColor = RING_COLORS[preset.color];
     if (preset.icon) {
-      previewSwatch.textContent = preset.icon;
-      previewSwatch.style.fontSize = '12px';
-      previewSwatch.style.textAlign = 'center';
-      previewSwatch.style.lineHeight = '16px';
+      colorSwatch.textContent = preset.icon;
     }
 
-    // Delete button in header
-    headerSetting.addButton((button) => {
-      button
-        .setIcon('trash')
-        .setWarning()
-        .setTooltip('Delete this preset')
-        .onClick(async () => {
-          this.plugin.settings.presets.splice(index, 1);
-          await this.plugin.saveSettings();
-          this.display();
-        });
+    // Preset title
+    const titleEl = summary.createSpan({
+      text: preset.label || preset.name,
+      cls: 'radcal-preset-title'
     });
+
+    // Name badge (the actual key used in YAML)
+    summary.createSpan({
+      text: preset.name,
+      cls: 'radcal-preset-name-badge'
+    });
+
+    // Content container
+    const presetContainer = details.createDiv({ cls: 'radcal-preset-content' });
 
     // Name (unique identifier used in radcal-preset)
     new Setting(presetContainer)
@@ -1530,10 +1549,12 @@ Birthday: 1982-09-24<br>
           .setPlaceholder('e.g. family')
           .setValue(preset.name)
           .onChange(async (value) => {
-            // Sanitize: lowercase, no spaces
             const sanitized = value.toLowerCase().replace(/\s+/g, '-');
             preset.name = sanitized;
             await this.plugin.saveSettings();
+            // Update badge
+            const badge = summary.querySelector('.radcal-preset-name-badge');
+            if (badge) badge.textContent = sanitized;
           });
       });
 
@@ -1548,6 +1569,8 @@ Birthday: 1982-09-24<br>
           .onChange(async (value) => {
             preset.label = value || undefined;
             await this.plugin.saveSettings();
+            // Update title
+            titleEl.textContent = value || preset.name;
           });
       });
 
@@ -1563,8 +1586,7 @@ Birthday: 1982-09-24<br>
           .onChange(async (value) => {
             preset.color = value as RingColorName;
             await this.plugin.saveSettings();
-            // Update preview
-            previewSwatch.style.backgroundColor = RING_COLORS[value as RingColorName];
+            colorSwatch.style.backgroundColor = RING_COLORS[value as RingColorName];
           });
       });
 
@@ -1617,17 +1639,22 @@ Birthday: 1982-09-24<br>
           .onChange(async (value) => {
             preset.icon = value.trim() || undefined;
             await this.plugin.saveSettings();
-            // Update preview
-            if (preset.icon) {
-              previewSwatch.textContent = preset.icon;
-            } else {
-              previewSwatch.textContent = '';
-            }
+            colorSwatch.textContent = preset.icon || '';
           });
       });
 
-    // Divider
-    presetContainer.createEl('hr');
+    // Delete button
+    new Setting(presetContainer)
+      .addButton((button) => {
+        button
+          .setButtonText('Delete Preset')
+          .setWarning()
+          .onClick(async () => {
+            this.plugin.settings.presets.splice(index, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          });
+      });
   }
 
   /**
