@@ -25,9 +25,5 @@ coverage/
 *.tmp
 *.temp
 
-# Claude Code Framework (Intellectual Property)
-CLAUDE.md
-specs/
-skills/
-.archive/
-.claude/
+# Claude plans (temporary)
+.claude/plans/
