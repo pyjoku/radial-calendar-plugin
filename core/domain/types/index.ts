@@ -495,7 +495,77 @@ export interface LifeActConfig {
 /**
  * View mode for the radial calendar
  */
-export type RadialViewMode = 'annual' | 'life';
+export type RadialViewMode =
+  | 'life'      // Birth to expected lifespan (years as segments)
+  | 'annual'    // 1 year (months/days)
+  | 'quarter'   // 1 quarter (3 months, ~90 days)
+  | 'month'     // 1 month (28-31 days)
+  | 'custom';   // User-defined period
+
+/**
+ * Predefined period types for quick selection
+ */
+export type PeriodType =
+  | 'life'
+  | 'annual'
+  | 'quarter'
+  | 'month'
+  | 'week'
+  | '10-days'    // Taoistic decade
+  | 'semester'   // 6 months
+  | 'trimester'  // 4 months
+  | 'custom';
+
+/**
+ * Configuration for custom/variable periods
+ */
+export interface PeriodConfig {
+  /** Period type */
+  type: PeriodType;
+
+  /** Custom period length in days (only for type='custom') */
+  customDays?: number;
+
+  /** Custom period label (only for type='custom') */
+  customLabel?: string;
+}
+
+/**
+ * Custom period string format: "10d", "3m", "2w", "6m", etc.
+ * - d = days (e.g., "10d" = 10 days)
+ * - w = weeks (e.g., "2w" = 14 days)
+ * - m = months (e.g., "3m" = 3 months)
+ */
+export function parseCustomPeriod(input: string): { days?: number; months?: number; label: string } | null {
+  const match = input.trim().toLowerCase().match(/^(\d+)(d|w|m)$/);
+  if (!match) return null;
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+
+  switch (unit) {
+    case 'd':
+      return { days: value, label: `${value} Days` };
+    case 'w':
+      return { days: value * 7, label: `${value} Weeks` };
+    case 'm':
+      return { months: value, label: `${value} Months` };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Get the number of days for a custom period (approximation for months)
+ */
+export function getCustomPeriodDays(input: string): number {
+  const parsed = parseCustomPeriod(input);
+  if (!parsed) return 30; // Default fallback
+
+  if (parsed.days) return parsed.days;
+  if (parsed.months) return parsed.months * 30; // Approximation
+  return 30;
+}
 
 /**
  * Center display mode
@@ -511,6 +581,7 @@ export type RingType =
   | 'year-months'   // 12 months
   | 'year-weeks'    // 52 weeks
   | 'year-days'     // 365/366 days
+  | 'global'        // Global ring for showInAnnual arcs
   | 'events';       // Variable events with start/end dates
 
 /**
@@ -752,6 +823,21 @@ export interface RadialCalendarSettings {
   /** Current year for annual view */
   currentYear: number;
 
+  /** Current month (1-12) for month/quarter views */
+  currentMonth: number;
+
+  /** Current quarter (1-4) for quarter view */
+  currentQuarter: number;
+
+  /** Period configuration for custom periods */
+  periodConfig: PeriodConfig;
+
+  /** Custom period string (e.g., "10d", "3m", "2w") */
+  customPeriodString: string;
+
+  /** Current start date for custom period view (ISO string YYYY-MM-DD) */
+  customPeriodStart: string;
+
   /** Ring configurations (ordered from outside to inside) */
   rings: RingConfig[];
 
@@ -817,6 +903,65 @@ export interface RadialCalendarSettings {
    * Use radcal-preset: presetName to apply.
    */
   presets: PresetConfig[];
+
+  // ======== Memento Mori ========
+
+  /**
+   * Memento Mori multi-ring view settings
+   */
+  mementoMori: MementoMoriSettings;
+}
+
+// ============================================================================
+// Memento Mori Types
+// ============================================================================
+
+/**
+ * Ring types for Memento Mori view
+ */
+export type MementoRingType = 'hour' | 'day' | 'custom-short' | 'month' | 'season' | 'year' | 'life';
+
+/**
+ * Configuration for a single Memento Mori ring
+ */
+export interface MementoRingConfig {
+  /** Ring type identifier */
+  id: MementoRingType;
+
+  /** Whether this ring is enabled */
+  enabled: boolean;
+
+  /** Display order (0 = innermost) */
+  order: number;
+
+  /** Display label */
+  label: string;
+
+  /** Custom days for 'custom-short' type */
+  customDays?: number;
+
+  /** Custom months for 'season' type */
+  customMonths?: number;
+}
+
+/**
+ * Complete Memento Mori settings
+ */
+export interface MementoMoriSettings {
+  /** Whether Memento Mori view is enabled */
+  enabled: boolean;
+
+  /** Ring configurations */
+  rings: MementoRingConfig[];
+
+  /** Color for past time */
+  colorPast: string;
+
+  /** Color for present marker */
+  colorPresent: string;
+
+  /** Color for future time */
+  colorFuture: string;
 }
 
 /**
@@ -1161,6 +1306,29 @@ export function createEventsRing(folder: string, order: number = 1): RingConfig 
   };
 }
 
+/**
+ * Create a Global ring configuration (for showInAnnual arcs)
+ * This ring scans the entire vault for notes with radcal-showInAnnual: true
+ */
+export function createGlobalRing(order: number = 0): RingConfig {
+  return {
+    id: 'global-ring',
+    name: 'Global',
+    folder: '', // Not used - scans entire vault
+    color: 'blue',
+    segmentType: 'custom',
+    enabled: true,
+    order,
+    ringType: 'global',
+    segmentStyle: 'from-yaml',
+    folderPattern: 'fixed',
+    recursive: false,
+    showGaps: true,
+    showLabels: true,
+    showSpanningArcs: true,
+  };
+}
+
 // ============================================================================
 // Track Assignment for Overlapping Phases
 // ============================================================================
@@ -1306,6 +1474,11 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
   birthYear: 1990,
   expectedLifespan: 85,
   currentYear: new Date().getFullYear(),
+  currentMonth: new Date().getMonth() + 1, // 1-12
+  currentQuarter: Math.ceil((new Date().getMonth() + 1) / 3), // 1-4
+  periodConfig: { type: 'annual' },
+  customPeriodString: '10d', // Default: 10-day period
+  customPeriodStart: new Date().toISOString().split('T')[0], // Today
   rings: [],
   centerDisplay: 'countdown',
   periodicNotesFormat: {
@@ -1331,6 +1504,27 @@ export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
   calendarSources: [],
   // Presets
   presets: [...DEFAULT_PRESETS],
+  // Memento Mori
+  mementoMori: DEFAULT_MEMENTO_MORI_SETTINGS,
+};
+
+/**
+ * Default Memento Mori settings
+ */
+export const DEFAULT_MEMENTO_MORI_SETTINGS: MementoMoriSettings = {
+  enabled: true,
+  rings: [
+    { id: 'hour', enabled: true, order: 0, label: 'Stunde' },
+    { id: 'day', enabled: true, order: 1, label: 'Tag' },
+    { id: 'custom-short', enabled: false, order: 2, label: 'Dekade', customDays: 10 },
+    { id: 'month', enabled: true, order: 3, label: 'Monat' },
+    { id: 'season', enabled: false, order: 4, label: 'Quartal', customMonths: 3 },
+    { id: 'year', enabled: true, order: 5, label: 'Jahr' },
+    { id: 'life', enabled: true, order: 6, label: 'Leben' },
+  ],
+  colorPast: 'gray',
+  colorPresent: 'red',
+  colorFuture: 'blue',
 };
 
 /**

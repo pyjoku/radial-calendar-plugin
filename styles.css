@@ -3,11 +3,17 @@
  * A circular/radial visualization of the calendar year
  */
 
-/* Container */
+/* Container - Obsidian view-content */
 .radial-calendar-plugin {
   height: 100%;
   overflow: auto;
   background: var(--background-primary);
+  position: relative;
+}
+
+/* Ensure Obsidian's view-content doesn't block interactions */
+.workspace-leaf-content[data-type="radial-calendar-view"] .view-content {
+  overflow: visible;
 }
 
 .rc-container {
@@ -16,6 +22,7 @@
   height: 100%;
   padding: 16px;
   position: relative;
+  isolation: isolate;
 }
 
 /* Header */
@@ -28,6 +35,11 @@
   flex-shrink: 0;
   position: relative;
   z-index: 100;
+  pointer-events: auto;
+}
+
+.rc-header * {
+  pointer-events: auto;
 }
 
 .rc-year-title {
@@ -55,6 +67,28 @@
 
 .rc-today-btn {
   margin-left: 16px;
+}
+
+/* View Mode Dropdown */
+.rc-view-select {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-normal);
+  font-size: 14px;
+  margin-left: 16px;
+  min-width: 120px;
+}
+
+.rc-view-select:hover {
+  background: var(--background-modifier-hover);
+}
+
+.rc-view-select:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
 }
 
 /* Ring Filter Bar */
@@ -104,6 +138,8 @@
   justify-content: center;
   min-height: 300px;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .rc-svg {
@@ -128,10 +164,36 @@
   stroke-width: 1;
 }
 
+/* Center for Period Views (Month, Quarter, Custom) */
+.rc-center-bg {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.rc-center-title {
+  font-size: 24px;
+  font-weight: 700;
+  fill: var(--text-normal);
+}
+
+.rc-center-subtitle {
+  font-size: 14px;
+  fill: var(--text-muted);
+}
+
 /* Month Labels */
 .rc-month-label {
   font-size: 12px;
   font-weight: 600;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Day Labels (for Month View) */
+.rc-month-day-label {
+  font-size: 10px;
+  font-weight: 500;
   fill: var(--text-muted);
   pointer-events: none;
 }
@@ -1432,6 +1494,33 @@
   font-weight: normal;
 }
 
+.radcal-ring-order-btns {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.radcal-order-btn {
+  background: var(--background-modifier-border);
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.radcal-order-btn:hover:not(:disabled) {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.radcal-order-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .radcal-ring-content {
   padding: 8px 16px 16px;
   border-top: 1px solid var(--background-modifier-border);
@@ -1579,4 +1668,560 @@
 .radcal-calendar-content {
   padding: 8px 16px 16px;
   border-top: 1px solid var(--background-modifier-border);
+}
+
+/* ============================================
+   RADCAL-DAY: 24-Hour Day View Codeblock
+   ============================================ */
+
+.radcal-day-container {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  position: relative;
+}
+
+.radcal-day-wrapper {
+  position: relative;
+  max-width: 400px;
+}
+
+.radcal-day-svg {
+  display: block;
+}
+
+.radcal-day-bg {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 2;
+}
+
+.radcal-day-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.radcal-day-tick {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+
+.radcal-day-hour-label {
+  fill: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.radcal-day-block {
+  opacity: 0.8;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.radcal-day-block:hover {
+  opacity: 1;
+  filter: brightness(1.1);
+}
+
+.radcal-day-now {
+  stroke: var(--color-red);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.radcal-day-now-dot {
+  fill: var(--color-red);
+}
+
+.radcal-day-center-time {
+  fill: var(--text-normal);
+  font-size: 32px;
+  font-weight: 600;
+  font-family: var(--font-monospace);
+}
+
+.radcal-day-tooltip {
+  position: absolute;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 200px;
+}
+
+.radcal-day-tooltip strong {
+  color: var(--text-normal);
+}
+
+/* ============================================
+   RADCAL WEEK VIEW
+   ============================================ */
+
+.radcal-week-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.radcal-week-wrapper {
+  position: relative;
+}
+
+.radcal-week-svg {
+  display: block;
+}
+
+.radcal-week-bg {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 2;
+}
+
+.radcal-week-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.radcal-week-divider {
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.radcal-week-day-label {
+  fill: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.radcal-week-block {
+  opacity: 0.8;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.radcal-week-block:hover {
+  opacity: 1;
+  filter: brightness(1.1);
+}
+
+.radcal-week-now {
+  fill: var(--color-red);
+  stroke: var(--background-primary);
+  stroke-width: 2;
+}
+
+.radcal-week-center-text {
+  fill: var(--text-normal);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.radcal-week-tooltip {
+  position: absolute;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 200px;
+}
+
+.radcal-week-tooltip strong {
+  color: var(--text-normal);
+}
+
+/* ============================================
+   RADCAL MONTH VIEW
+   ============================================ */
+
+.radcal-month-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.radcal-month-wrapper {
+  position: relative;
+}
+
+.radcal-month-svg {
+  display: block;
+}
+
+.radcal-month-bg {
+  fill: var(--background-secondary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 2;
+}
+
+.radcal-month-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.radcal-month-tick {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+
+.radcal-month-day-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.radcal-month-block {
+  opacity: 0.8;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.radcal-month-block:hover {
+  opacity: 1;
+  filter: brightness(1.1);
+}
+
+.radcal-month-now {
+  fill: var(--color-red);
+  stroke: var(--background-primary);
+  stroke-width: 2;
+}
+
+.radcal-month-center-text {
+  fill: var(--text-normal);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.radcal-month-tooltip {
+  position: absolute;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 200px;
+}
+
+.radcal-month-tooltip strong {
+  color: var(--text-normal);
+}
+
+/* ============================================
+   RADCAL MULTI-RING VIEW
+   ============================================ */
+
+.radcal-multi-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.radcal-multi-wrapper {
+  position: relative;
+}
+
+.radcal-multi-svg {
+  display: block;
+}
+
+.radcal-multi-bg {
+  fill: var(--background-secondary);
+}
+
+.radcal-multi-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.radcal-multi-ring-bg {
+  opacity: 0.3;
+}
+
+.radcal-multi-tick {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.radcal-multi-block {
+  opacity: 0.85;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.radcal-multi-block:hover {
+  opacity: 1;
+  filter: brightness(1.15);
+}
+
+.radcal-multi-now {
+  fill: var(--color-red);
+  stroke: var(--background-primary);
+  stroke-width: 2;
+}
+
+.radcal-multi-now-line {
+  stroke: var(--color-red);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.radcal-multi-center-time {
+  fill: var(--text-normal);
+  font-size: 24px;
+  font-weight: 600;
+  font-family: var(--font-monospace);
+}
+
+.radcal-multi-tooltip {
+  position: absolute;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 200px;
+}
+
+.radcal-multi-tooltip strong {
+  color: var(--text-normal);
+}
+
+/* ============================================
+   MEMENTO MORI: Multi-Ring Time View
+   ============================================ */
+
+.memento-mori-container {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: var(--background-primary);
+}
+
+.memento-mori-wrapper {
+  max-width: 600px;
+  width: 100%;
+}
+
+.memento-mori-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.memento-refresh-btn {
+  background: var(--background-modifier-hover);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  transition: all 0.2s ease;
+}
+
+.memento-refresh-btn:hover {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.memento-refresh-spinning {
+  animation: memento-spin 0.5s linear;
+}
+
+@keyframes memento-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.memento-mori-svg {
+  display: block;
+}
+
+.memento-bg {
+  fill: var(--background-secondary);
+}
+
+.memento-past {
+  fill: var(--text-muted);
+  opacity: 0.25;
+}
+
+.memento-present {
+  fill: var(--color-red);
+  opacity: 0.9;
+}
+
+.memento-future {
+  fill: var(--background-modifier-border);
+  opacity: 0.4;
+}
+
+.memento-ring-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.memento-center-bg {
+  fill: var(--background-primary);
+}
+
+.memento-center-time {
+  fill: var(--text-normal);
+  font-size: 24px;
+  font-weight: 600;
+  font-family: var(--font-monospace);
+}
+
+.memento-center-date {
+  fill: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Time blocks from daily note */
+.memento-block {
+  stroke: var(--background-primary);
+  stroke-width: 1px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.memento-block:hover {
+  opacity: 0.9 !important;
+}
+
+/* Current time indicator */
+.memento-time-indicator {
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+/* ============================================
+   MEMENTO MORI SETTINGS
+   ============================================ */
+
+.memento-ring-list {
+  margin: 16px 0;
+}
+
+.memento-ring-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.memento-ring-arrows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.memento-arrow-btn {
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  font-size: 12px;
+  background: var(--background-modifier-border);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.memento-arrow-btn:hover:not([disabled]) {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.memento-arrow-btn[disabled] {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.memento-ring-info {
+  flex: 1;
+}
+
+.memento-ring-label {
+  margin-bottom: 4px;
+}
+
+.memento-ring-desc {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.memento-ring-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.memento-ring-input {
+  width: 50px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.memento-ring-toggle {
+  display: flex;
+  align-items: center;
+}
+
+/* Syntax instruction blocks */
+.memento-syntax-block {
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.memento-syntax-block strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-normal);
+}
+
+.memento-syntax-block pre {
+  margin: 0;
+  padding: 8px;
+  background: var(--background-primary);
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  color: var(--text-muted);
 }

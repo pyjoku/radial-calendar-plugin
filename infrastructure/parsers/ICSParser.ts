@@ -17,6 +17,10 @@ export interface ParsedEvent {
   isAllDay: boolean;
   isRecurring: boolean;
   recurrenceRule?: string;
+  /** Revision number - increments when event is modified */
+  sequence?: number;
+  /** Last modification timestamp (ISO string) */
+  lastModified?: string;
 }
 
 /**
@@ -103,6 +107,14 @@ export async function parseICS(content: string): Promise<ParsedEvent[]> {
         currentEvent.isRecurring = true;
         currentEvent.recurrenceRule = valuePart;
         break;
+
+      case 'SEQUENCE':
+        currentEvent.sequence = parseInt(valuePart, 10) || 0;
+        break;
+
+      case 'LAST-MODIFIED':
+        currentEvent.lastModified = parseICSTimestamp(valuePart);
+        break;
     }
   }
 
@@ -164,6 +176,25 @@ function parseICSDate(value: string, params: string): { date: Date; isAllDay: bo
   }
 
   return { date: new Date(year, month, day), isAllDay: true };
+}
+
+/**
+ * Parse ICS timestamp to ISO string (YYYYMMDDTHHMMSSZ → ISO)
+ */
+function parseICSTimestamp(value: string): string {
+  // Format: YYYYMMDDTHHMMSSZ or YYYYMMDDTHHMMSS
+  const year = value.substring(0, 4);
+  const month = value.substring(4, 6);
+  const day = value.substring(6, 8);
+
+  if (value.length >= 15) {
+    const hour = value.substring(9, 11);
+    const minute = value.substring(11, 13);
+    const second = value.substring(13, 15);
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+  }
+
+  return `${year}-${month}-${day}T00:00:00Z`;
 }
 
 /**

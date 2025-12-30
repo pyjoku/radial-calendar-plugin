@@ -13,6 +13,7 @@ import { parseRadcalConfig } from './RadcalConfigParser';
 import { RadcalRenderer, EntriesByDate } from './RadcalRenderer';
 import { RadcalFilterEngine } from './RadcalFilterEngine';
 import type { RadcalBlockConfig } from '../../core/domain/types/radcal-block';
+import { parseTimeBlock, DayViewRenderChild, WeekViewRenderChild, MonthViewRenderChild, MultiRingRenderChild } from './TimeBlockRenderer';
 
 /**
  * Render child for radcal codeblocks with live updates
@@ -372,7 +373,52 @@ export class RadcalBlockProcessor {
     ctx: MarkdownPostProcessorContext
   ): void {
     try {
-      // Parse configuration
+      // Check if this is a time block type (day/week/month)
+      // Match "type: day" or "type:day" at start of any line
+      const typeMatch = source.match(/^type:\s*(day|week|month)/im);
+
+      if (typeMatch) {
+        // Parse as time block
+        const { config, dayBlocks, weekBlocks, monthBlocks } = parseTimeBlock(source);
+
+        // Count how many ring types have data
+        const hasDay = dayBlocks.length > 0;
+        const hasWeek = weekBlocks.length > 0;
+        const hasMonth = monthBlocks.length > 0;
+        const ringCount = (hasDay ? 1 : 0) + (hasWeek ? 1 : 0) + (hasMonth ? 1 : 0);
+
+        console.log('[Radcal] Time blocks:', { dayBlocks: dayBlocks.length, weekBlocks: weekBlocks.length, monthBlocks: monthBlocks.length });
+
+        let renderChild: MarkdownRenderChild;
+
+        // Use MultiRingRenderChild if multiple types have data
+        if (ringCount > 1) {
+          const container = el.createDiv({ cls: 'radcal-multi-container' });
+          renderChild = new MultiRingRenderChild(container, config, dayBlocks, weekBlocks, monthBlocks);
+        } else {
+          // Single type - use specific renderer
+          const container = el.createDiv({ cls: `radcal-${config.type}-container` });
+
+          switch (config.type) {
+            case 'day':
+              renderChild = new DayViewRenderChild(container, config, dayBlocks);
+              break;
+            case 'week':
+              renderChild = new WeekViewRenderChild(container, config, weekBlocks);
+              break;
+            case 'month':
+              renderChild = new MonthViewRenderChild(container, config, monthBlocks);
+              break;
+            default:
+              throw new Error(`Unknown type: ${config.type}`);
+          }
+        }
+
+        ctx.addChild(renderChild);
+        return;
+      }
+
+      // Standard radcal: Parse configuration
       const config = parseRadcalConfig(source);
 
       // Create container

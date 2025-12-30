@@ -192,6 +192,24 @@ export class CalendarService {
   }
 
   /**
+   * Gets entries for a specific date filtered by folder
+   * @param date - The date to get entries for
+   * @param folder - The folder path to filter by
+   * @returns Array of calendar entries in the specified folder
+   */
+  getEntriesForDateInFolder(date: LocalDate, folder: string): readonly CalendarEntry[] {
+    const entries = this.entryCache.getEntriesForDate(date);
+    if (!folder) return entries;
+
+    const normalizedFolder = folder.toLowerCase().replace(/\/$/, '');
+    return entries.filter(entry => {
+      if (!entry.path) return false;
+      const entryFolder = entry.path.substring(0, entry.path.lastIndexOf('/')).toLowerCase();
+      return entryFolder === normalizedFolder || entryFolder.startsWith(normalizedFolder + '/');
+    });
+  }
+
+  /**
    * Gets all multi-day entries for the current year
    * @returns Array of multi-day entries
    */
@@ -810,6 +828,178 @@ export class CalendarService {
     }
 
     // Sort by start angle
+    return segments.sort((a, b) => a.startAngle - b.startAngle);
+  }
+
+  /**
+   * Loads all files with radcal-showInAnnual: true for the annual view.
+   *
+   * Similar to loadSpanningArcs but not restricted to a folder.
+   * Files must have radcal-start and optionally radcal-end.
+   *
+   * @param year - The year to filter events for
+   * @param presets - Optional array of preset configurations
+   * @returns Array of rendered segments with angles for the year ring
+   */
+  loadShowInAnnualArcs(
+    year: number,
+    presets?: import('../../core/domain/types').PresetConfig[]
+  ): RenderedSegment[] {
+    const files = this.vaultRepository.getAllMarkdownFiles();
+    const segments: RenderedSegment[] = [];
+
+    // Build preset lookup map
+    const presetMap = new Map<string, import('../../core/domain/types').PresetConfig>();
+    if (presets) {
+      for (const preset of presets) {
+        presetMap.set(preset.name.toLowerCase(), preset);
+      }
+    }
+
+    const yearStart = createLocalDate(year, 1, 1);
+    const yearEnd = createLocalDate(year, 12, 31);
+    const { RING_COLORS } = require('../../core/domain/types');
+
+    for (const fileInfo of files) {
+      const metadata = this.metadataRepository.getMetadataByPath(fileInfo.path);
+      const frontmatter = metadata?.frontmatter;
+
+      if (!frontmatter) continue;
+
+      // Check for radcal-showInAnnual: true
+      if (frontmatter['radcal-showInAnnual'] !== true) continue;
+
+      // Parse start date
+      const startStr = frontmatter['radcal-start'];
+      if (!startStr || typeof startStr !== 'string') continue;
+
+      const startDate = this.parseYAMLDate(startStr);
+      if (!startDate) continue;
+
+      // Parse end date with three-way logic:
+      // - Property NOT SET (undefined) → single-day (end = start)
+      // - Property EMPTY (null or "") → open-ended (end = year end)
+      // - Property WITH VALUE → parse as date
+      const endRaw = frontmatter['radcal-end'];
+      let endDate: LocalDate;
+      let isOpenEnded = false;
+
+      if (endRaw === undefined) {
+        // Property not set → single-day event
+        endDate = startDate;
+      } else if (endRaw === null || endRaw === '' || (typeof endRaw === 'string' && endRaw.trim() === '')) {
+        // Property set but empty → open-ended (extends to year end)
+        endDate = yearEnd;
+        isOpenEnded = true;
+      } else if (typeof endRaw === 'string') {
+        // Property has value → parse date
+        const parsed = this.parseYAMLDate(endRaw);
+        endDate = parsed || startDate;
+      } else {
+        endDate = startDate;
+      }
+
+      // Check if event overlaps with the year
+      if (endDate.year < year || startDate.year > year) {
+        continue;
+      }
+
+      // Check if event crosses year boundaries
+      const continuesFromPreviousYear = this.compareDates(startDate, yearStart) < 0;
+      const continuesIntoNextYear = isOpenEnded || this.compareDates(endDate, yearEnd) > 0;
+
+      // Clamp dates to the year boundaries
+      const clampedStart = continuesFromPreviousYear ? yearStart : startDate;
+      const clampedEnd = continuesIntoNextYear ? yearEnd : endDate;
+
+      // Get color
+      const colorStr = frontmatter['radcal-color'];
+      const color: RingColorName | undefined = this.isValidColor(colorStr) ? colorStr : undefined;
+
+      // Get label
+      const label = frontmatter['radcal-label'] || fileInfo.basename;
+
+      // Convert dates to angles
+      const startAngle = continuesFromPreviousYear ? 0 : this.dateToYearAngle(clampedStart, year);
+      const endAngle = continuesIntoNextYear ? 2 * Math.PI : this.dateToYearAngle(clampedEnd, year);
+
+      // Calculate duration
+      const durationDays = daysBetween(startDate, endDate) + 1;
+
+      // Parse visual options
+      const patternStr = frontmatter['radcal-pattern'];
+      const pattern: PatternName | undefined = this.isValidPattern(patternStr) ? patternStr : undefined;
+
+      const opacityValue = frontmatter['radcal-opacity'];
+      let opacity: number | undefined;
+      if (typeof opacityValue === 'number' && opacityValue >= 0 && opacityValue <= 100) {
+        opacity = opacityValue;
+      } else if (typeof opacityValue === 'string') {
+        const parsed = parseInt(opacityValue, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+          opacity = parsed;
+        }
+      }
+
+      const fadeValue = frontmatter['radcal-fade'];
+      const fade = fadeValue === true || fadeValue === 'true';
+
+      // Get icon
+      const iconValue = frontmatter['radcal-icon'];
+      const icon = typeof iconValue === 'string' && iconValue.trim() ? iconValue.trim() : undefined;
+
+      // Get preset
+      const presetValue = frontmatter['radcal-preset'];
+      const presetName = typeof presetValue === 'string' && presetValue.trim() ? presetValue.trim().toLowerCase() : undefined;
+
+      // Apply preset values
+      let resolvedColor = color;
+      let resolvedPattern = pattern;
+      let resolvedOpacity = opacity;
+      let resolvedIcon = icon;
+
+      if (presetName) {
+        const preset = presetMap.get(presetName);
+        if (preset) {
+          if (resolvedColor === undefined) {
+            resolvedColor = preset.color;
+          }
+          if (resolvedPattern === undefined && preset.pattern !== undefined) {
+            resolvedPattern = preset.pattern;
+          }
+          if (resolvedOpacity === undefined && preset.opacity !== undefined) {
+            resolvedOpacity = preset.opacity;
+          }
+          if (resolvedIcon === undefined && preset.icon !== undefined) {
+            resolvedIcon = preset.icon;
+          }
+        }
+      }
+
+      // Default color if still undefined
+      const hexColor = resolvedColor ? RING_COLORS[resolvedColor] : RING_COLORS.blue;
+
+      segments.push({
+        id: fileInfo.path,
+        filePath: fileInfo.path,
+        label: String(label),
+        startAngle,
+        endAngle,
+        color: hexColor,
+        entries: [],
+        continuesFromPreviousYear,
+        continuesIntoNextYear,
+        startDate: { year: startDate.year, month: startDate.month, day: startDate.day },
+        endDate: { year: endDate.year, month: endDate.month, day: endDate.day },
+        durationDays,
+        pattern: resolvedPattern,
+        opacity: resolvedOpacity,
+        fade: fade || isOpenEnded, // Open-ended events get fade effect
+        icon: resolvedIcon,
+        isOngoing: isOpenEnded,
+      });
+    }
+
     return segments.sort((a, b) => a.startAngle - b.startAngle);
   }
 

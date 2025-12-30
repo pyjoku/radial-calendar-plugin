@@ -9,14 +9,16 @@ import { Plugin, WorkspaceLeaf, TFile, Notice, Menu } from 'obsidian';
 import { CalendarService } from '../application/services/CalendarService';
 import { RadialCalendarView, VIEW_TYPE_RADIAL_CALENDAR } from '../presentation/views/RadialCalendarView';
 import { LocalCalendarView, VIEW_TYPE_LOCAL_CALENDAR } from '../presentation/views/LocalCalendarView';
+import { MementoMoriView, VIEW_TYPE_MEMENTO_MORI } from '../presentation/views/MementoMoriView';
 import { RadcalBlockProcessor } from '../presentation/codeblock/RadcalBlockProcessor';
+import { DayBlockProcessor } from '../presentation/codeblock/DayBlockProcessor';
 import { RadialCalendarSettingTab } from './RadialCalendarSettingTab';
 import { GoogleCalendarSync, SyncResult } from '../infrastructure/sync/GoogleCalendarSync';
 import { createRadialCalendarBasesView } from '../presentation/bases/RadialCalendarBasesView';
 import { ColorSuggesterModal } from '../presentation/components/ColorSuggesterModal';
 import { RadcalPropertyModal } from '../presentation/components/PropertyModal';
 import type { RadialCalendarSettings, LinearCalendarSettings, LocalDate } from '../core/domain/types';
-import { DEFAULT_RADIAL_SETTINGS, createLocalDate } from '../core/domain/types';
+import { DEFAULT_RADIAL_SETTINGS, createLocalDate, createGlobalRing } from '../core/domain/types';
 
 export class RadialCalendarPlugin extends Plugin {
   private service: CalendarService | null = null;
@@ -79,6 +81,18 @@ export class RadialCalendarPlugin extends Plugin {
       return view;
     });
 
+    // Register Memento Mori view
+    this.registerView(VIEW_TYPE_MEMENTO_MORI, (leaf) => {
+      return new MementoMoriView(
+        leaf,
+        this.settings.mementoMori,
+        this.settings.birthDate || `${this.settings.birthYear}-01-01`,
+        this.settings.expectedLifespan,
+        this.settings.dailyNoteFolder || '',
+        this.settings.periodicNotesFormat?.daily || 'YYYY-MM-DD'
+      );
+    });
+
     // Register radcal codeblock processor
     const blockProcessor = new RadcalBlockProcessor(
       this.app,
@@ -93,6 +107,13 @@ export class RadialCalendarPlugin extends Plugin {
     this.registerMarkdownCodeBlockProcessor(
       'radcal',
       (source, el, ctx) => blockProcessor.process(source, el, ctx)
+    );
+
+    // Register day view codeblock processor
+    const dayBlockProcessor = new DayBlockProcessor(this.app);
+    this.registerMarkdownCodeBlockProcessor(
+      'radcal-day',
+      (source, el, ctx) => dayBlockProcessor.process(source, el, ctx)
     );
 
     // Register Bases view (Obsidian 1.10+)
@@ -111,6 +132,11 @@ export class RadialCalendarPlugin extends Plugin {
       this.activateLocalCalendarView();
     });
 
+    // Add ribbon icon for Memento Mori
+    this.addRibbonIcon('hourglass', 'Open Memento Mori', () => {
+      this.activateMementoMoriView();
+    });
+
     // Add command
     this.addCommand({
       id: 'open-radial-calendar',
@@ -126,6 +152,15 @@ export class RadialCalendarPlugin extends Plugin {
       name: 'Open Local Calendar (Sidebar)',
       callback: () => {
         this.activateLocalCalendarView();
+      },
+    });
+
+    // Add command for Memento Mori
+    this.addCommand({
+      id: 'open-memento-mori',
+      name: 'Open Memento Mori View',
+      callback: () => {
+        this.activateMementoMoriView();
       },
     });
 
@@ -262,6 +297,23 @@ export class RadialCalendarPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const data = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_RADIAL_SETTINGS, data);
+
+    // Migration: Add Global Ring if it doesn't exist
+    const hasGlobalRing = this.settings.rings.some(r => r.ringType === 'global');
+    if (!hasGlobalRing) {
+      // Insert Global Ring at position 0 (outermost), shift other rings
+      const globalRing = createGlobalRing(0);
+      this.settings.rings = this.settings.rings.map(r => ({ ...r, order: r.order + 1 }));
+      this.settings.rings.unshift(globalRing);
+      await this.saveData(this.settings);
+    }
+
+    // Migration: Add Memento Mori settings if they don't exist
+    if (!this.settings.mementoMori) {
+      const { DEFAULT_MEMENTO_MORI_SETTINGS } = await import('../core/domain/types');
+      this.settings.mementoMori = DEFAULT_MEMENTO_MORI_SETTINGS;
+      await this.saveData(this.settings);
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -318,6 +370,26 @@ export class RadialCalendarPlugin extends Plugin {
       if (leaf) {
         await leaf.setViewState({
           type: VIEW_TYPE_LOCAL_CALENDAR,
+          active: true,
+        });
+      }
+    }
+
+    if (leaf) {
+      workspace.revealLeaf(leaf);
+    }
+  }
+
+  private async activateMementoMoriView(): Promise<void> {
+    const { workspace } = this.app;
+    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VIEW_TYPE_MEMENTO_MORI)[0] ?? null;
+
+    if (!leaf) {
+      // Open in right sidebar
+      leaf = workspace.getRightLeaf(false);
+      if (leaf) {
+        await leaf.setViewState({
+          type: VIEW_TYPE_MEMENTO_MORI,
           active: true,
         });
       }

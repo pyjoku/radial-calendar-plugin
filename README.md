@@ -19,6 +19,9 @@ A beautiful circular/radial calendar visualization for [Obsidian](https://obsidi
 - **Spanning Arcs** - Display multi-day events as continuous arcs
 - **Google Calendar Sync** - Import events from iCal URLs
 - **Radcal Codeblock** - Embed filtered calendars in notes (Dataview-like)
+- **Time Block Views** - Day/Week/Month radial clocks with time blocks
+- **Memento Mori View** - Multi-ring life visualization (hour/day/week/month/year/life)
+- **Periodic Notes Integration** - Load time blocks from Periodic Notes
 - **Advanced Filters** - Filter by tag, folder, filename, property, or links
 - **Customizable Segments** - Show quarters, seasons, weeks, or custom segments
 - **Local Calendar Sidebar** - Compact calendar view in the sidebar
@@ -514,6 +517,160 @@ lifespan: 85
 - **Click** on a day with entries to open the note
 - **Hover** over days to see tooltips with entry names
 - **Live updates** - calendar refreshes automatically when notes change
+
+---
+
+## Time Block Views
+
+Visualize your schedule as radial clocks using the unified `radcal` codeblock with `type:` parameter.
+
+### Daily View (24-Hour Clock)
+
+````markdown
+```radcal
+type: day
+09:00-10:00 blue: Morning Meeting
+14:00-16:00 green: Project Work
+18:00-19:00 orange: Exercise
+```
+````
+
+Renders a 24-hour clock with your time blocks as colored arcs.
+
+### Weekly View (7-Day Ring)
+
+````markdown
+```radcal
+type: week
+Mo 09:00-17:00 blue: Work
+Mi 14:00-15:00 green: Team Meeting
+Sa 10:00-12:00 orange: Sport
+```
+````
+
+Displays a 7-day ring (Monday at top) with time blocks mapped within each day segment.
+
+**Supported day names:** `Mon/Mo`, `Tue/Di`, `Wed/Mi`, `Thu/Do`, `Fri/Fr`, `Sat/Sa`, `Sun/So`
+
+### Monthly View (31-Day Ring)
+
+````markdown
+```radcal
+type: month
+15 red: Dentist
+20-22 blue: Conference
+25 green: Christmas
+```
+````
+
+Shows a monthly ring with day markers. Ranges like `20-22` create multi-day arcs.
+
+### Multi-Ring View
+
+Combine multiple types in a single codeblock for concentric rings:
+
+````markdown
+```radcal
+type: day
+09:00-10:00 blue: Meeting
+
+type: week
+Mo 09:00-17:00 blue: Work
+Fr 14:00-16:00 green: Review
+
+type: month
+15 red: Deadline
+20-22 purple: Vacation
+```
+````
+
+This renders three concentric rings (month → week → day from outside to inside).
+
+### Syntax
+
+The syntax uses `color: label` format (no pipe symbol needed):
+
+```
+TIME color: Label
+```
+
+**Examples:**
+- `09:00-10:00 blue: Meeting` - Day block
+- `Mo 09:00-12:00 green: Work` - Week block
+- `15 red: Appointment` - Month block (single day)
+- `15-17 purple: Conference` - Month block (range)
+
+**Available colors:** `blue`, `green`, `red`, `orange`, `purple`, `yellow`, `cyan`, `pink`, `teal`, `lime`, `amber`, `indigo`
+
+---
+
+## Memento Mori View
+
+A philosophical multi-ring visualization of time at different scales - from hours to your entire life.
+
+### Opening the View
+
+1. Command Palette → "Open Memento Mori View"
+2. Or click the skull icon in the ribbon
+
+### Configurable Rings
+
+Each ring represents a different time scale:
+
+| Ring | Description |
+|------|-------------|
+| Hour | Current hour progress (60 minutes) |
+| Day | 24-hour ring with current time |
+| Custom Short | Configurable 1-30 days (default: 7 days = week) |
+| Month | Current month (28-31 days) |
+| Season | Current quarter (90 days) |
+| Year | Full year (365 days) |
+| Life | From birth to expected lifespan |
+
+### Configuration
+
+In Settings → Memento Mori:
+
+- **Birth Date** - Your birth date for life calculations
+- **Expected Lifespan** - Default: 85 years
+- **Ring Order** - Drag to reorder rings
+- **Enable/Disable** - Toggle individual rings
+
+### Periodic Notes Integration
+
+The Memento Mori view can load time blocks from your Periodic Notes:
+
+1. Install the [Periodic Notes](https://github.com/liamcain/obsidian-periodic-notes) plugin
+2. Add `radcal` codeblocks to your periodic notes
+3. Click the refresh button in Memento Mori to load them
+
+**Weekly Note Example:**
+````markdown
+```radcal
+type: week
+Mo 09:00-17:00 blue: Work
+Mi 14:00-15:00 green: Meeting
+```
+````
+
+**Monthly Note Example:**
+````markdown
+```radcal
+type: month
+15 red: Dentist
+20-22 blue: Conference
+```
+````
+
+### Right-Click Integration
+
+Right-click on any ring to open the corresponding Periodic Note (requires Periodic Notes plugin):
+
+- Day ring → Open Daily Note
+- Week ring (7 days) → Open Weekly Note
+- Month ring → Open Monthly Note
+- Season ring → Open Quarterly Note
+- Year ring → Open Yearly Note
 
 ---
 

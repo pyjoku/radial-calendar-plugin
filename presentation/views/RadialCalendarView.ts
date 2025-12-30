@@ -25,6 +25,7 @@ import {
   assignTracks,
   computeSubRingRadii,
   getMaxTrackCount,
+  parseCustomPeriod,
 } from '../../core/domain/types';
 
 export const VIEW_TYPE_RADIAL_CALENDAR = 'radial-calendar-plugin';
@@ -183,6 +184,8 @@ export class RadialCalendarView extends ItemView {
     // Build header off-DOM
     const header = document.createElement('div');
     header.className = 'rc-header';
+    header.style.position = 'relative';
+    header.style.zIndex = '100';
     this.buildHeader(header, year);
     container.appendChild(header);
 
@@ -198,6 +201,8 @@ export class RadialCalendarView extends ItemView {
     // Build SVG wrapper off-DOM
     const wrapper = document.createElement('div');
     wrapper.className = 'rc-wrapper';
+    wrapper.style.position = 'relative';
+    wrapper.style.zIndex = '1';
     container.appendChild(wrapper);
 
     // Build SVG completely off-DOM
@@ -218,30 +223,28 @@ export class RadialCalendarView extends ItemView {
   private buildHeader(header: HTMLElement, year: number): void {
     if (!this.config) return;
 
-    // Previous year button
+    const currentView = this.config.settings.currentView;
+
+    // Previous period button
     const prevBtn = document.createElement('button');
     prevBtn.textContent = '\u2190';
     prevBtn.className = 'rc-nav-btn';
-    prevBtn.setAttribute('aria-label', 'Previous year');
-    prevBtn.addEventListener('click', () => {
-      this.config?.service.previousYear();
-    });
+    prevBtn.setAttribute('aria-label', 'Previous period');
+    prevBtn.addEventListener('click', () => this.navigatePrevious());
     header.appendChild(prevBtn);
 
-    // Year display
-    const yearTitle = document.createElement('span');
-    yearTitle.textContent = String(year);
-    yearTitle.className = 'rc-year-title';
-    header.appendChild(yearTitle);
+    // Period title (dynamic based on view mode)
+    const periodTitle = document.createElement('span');
+    periodTitle.textContent = this.getPeriodTitle();
+    periodTitle.className = 'rc-year-title';
+    header.appendChild(periodTitle);
 
-    // Next year button
+    // Next period button
     const nextBtn = document.createElement('button');
     nextBtn.textContent = '\u2192';
     nextBtn.className = 'rc-nav-btn';
-    nextBtn.setAttribute('aria-label', 'Next year');
-    nextBtn.addEventListener('click', () => {
-      this.config?.service.nextYear();
-    });
+    nextBtn.setAttribute('aria-label', 'Next period');
+    nextBtn.addEventListener('click', () => this.navigateNext());
     header.appendChild(nextBtn);
 
     // Today button
@@ -249,9 +252,7 @@ export class RadialCalendarView extends ItemView {
     todayBtn.textContent = 'Today';
     todayBtn.className = 'rc-nav-btn rc-today-btn';
     todayBtn.setAttribute('aria-label', 'Go to today');
-    todayBtn.addEventListener('click', () => {
-      this.config?.service.goToToday();
-    });
+    todayBtn.addEventListener('click', () => this.navigateToToday());
     header.appendChild(todayBtn);
 
     // Refresh button
@@ -259,27 +260,236 @@ export class RadialCalendarView extends ItemView {
     refreshBtn.textContent = '\u21bb';
     refreshBtn.className = 'rc-nav-btn rc-refresh-btn';
     refreshBtn.setAttribute('aria-label', 'Refresh view');
-    refreshBtn.addEventListener('click', () => {
-      this.render();
-    });
+    refreshBtn.addEventListener('click', () => this.render());
     header.appendChild(refreshBtn);
 
-    // View toggle button
-    const viewBtn = document.createElement('button');
-    const currentIsLifeView = this.config.settings.currentView === 'life';
-    viewBtn.textContent = currentIsLifeView ? '📅' : '⏳';
-    viewBtn.className = 'rc-nav-btn rc-view-btn';
-    viewBtn.setAttribute('aria-label', currentIsLifeView ? 'Switch to Annual View' : 'Switch to Life View');
-    viewBtn.addEventListener('click', async () => {
+    // View mode dropdown
+    const viewSelect = document.createElement('select');
+    viewSelect.className = 'rc-view-select';
+    viewSelect.setAttribute('aria-label', 'Select view mode');
+
+    // Get custom period label
+    const customPeriod = parseCustomPeriod(this.config.settings.customPeriodString);
+    const customLabel = customPeriod ? `⚙️ ${customPeriod.label}` : '⚙️ Custom';
+
+    const viewOptions = [
+      { value: 'life', label: '⏳ Life' },
+      { value: 'annual', label: '📅 Year' },
+      { value: 'quarter', label: '📊 Quarter' },
+      { value: 'month', label: '🗓️ Month' },
+      { value: 'custom', label: customLabel },
+    ];
+
+    for (const opt of viewOptions) {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      option.selected = currentView === opt.value;
+      viewSelect.appendChild(option);
+    }
+
+    viewSelect.addEventListener('change', async (e) => {
       if (!this.config) return;
-      // Toggle view and save settings
-      const newView = this.config.settings.currentView === 'life' ? 'annual' : 'life';
-      const newSettings = { ...this.config.settings, currentView: newView as 'life' | 'annual' };
+      const newView = (e.target as HTMLSelectElement).value as 'life' | 'annual' | 'quarter' | 'month' | 'custom';
+      const newSettings = { ...this.config.settings, currentView: newView };
       this.config.settings = newSettings;
       await this.config.onSettingsChange(newSettings);
       this.render();
     });
-    header.appendChild(viewBtn);
+
+    header.appendChild(viewSelect);
+  }
+
+  /**
+   * Gets the title for the current period based on view mode
+   */
+  private getPeriodTitle(): string {
+    if (!this.config) return '';
+
+    const { currentView, currentYear, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
+
+    switch (currentView) {
+      case 'life':
+        return `Life (${this.config.settings.birthYear} - ${this.config.settings.birthYear + this.config.settings.expectedLifespan})`;
+      case 'annual':
+        return String(currentYear);
+      case 'quarter':
+        return `Q${currentQuarter} ${currentYear}`;
+      case 'month':
+        return `${FULL_MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
+      case 'custom': {
+        const parsed = parseCustomPeriod(customPeriodString);
+        const startDate = this.parseISODate(customPeriodStart);
+        if (parsed && startDate) {
+          // Format: "Jan 1 - Jan 10" or "Jan 1 - Feb 1"
+          const endDate = this.addDaysToDate(startDate, parsed.days || (parsed.months || 1) * 30);
+          const startStr = `${MONTH_NAMES[startDate.month - 1]} ${startDate.day}`;
+          const endStr = `${MONTH_NAMES[endDate.month - 1]} ${endDate.day}`;
+          return `${startStr} - ${endStr}`;
+        }
+        return customPeriodString;
+      }
+      default:
+        return String(currentYear);
+    }
+  }
+
+  /**
+   * Parse ISO date string to LocalDate
+   */
+  private parseISODate(isoString: string): LocalDate | null {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    return createLocalDate(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+  }
+
+  /**
+   * Add days to a date and return new LocalDate
+   */
+  private addDaysToDate(date: LocalDate, days: number): LocalDate {
+    const d = new Date(date.year, date.month - 1, date.day);
+    d.setDate(d.getDate() + days - 1); // -1 because end is inclusive
+    return createLocalDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  }
+
+  /**
+   * Navigate to previous period based on view mode
+   */
+  private async navigatePrevious(): Promise<void> {
+    if (!this.config) return;
+
+    const { currentView, currentYear, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
+    let newSettings = { ...this.config.settings };
+
+    switch (currentView) {
+      case 'life':
+        // Life view doesn't navigate - already shows everything
+        return;
+      case 'annual':
+        newSettings.currentYear = currentYear - 1;
+        this.config.service.setYear(currentYear - 1);
+        break;
+      case 'quarter':
+        if (currentQuarter > 1) {
+          newSettings.currentQuarter = currentQuarter - 1;
+        } else {
+          newSettings.currentQuarter = 4;
+          newSettings.currentYear = currentYear - 1;
+        }
+        break;
+      case 'month':
+        if (currentMonth > 1) {
+          newSettings.currentMonth = currentMonth - 1;
+        } else {
+          newSettings.currentMonth = 12;
+          newSettings.currentYear = currentYear - 1;
+        }
+        break;
+      case 'custom': {
+        const parsed = parseCustomPeriod(customPeriodString);
+        const startDate = this.parseISODate(customPeriodStart);
+        if (parsed && startDate) {
+          const days = parsed.days || (parsed.months || 1) * 30;
+          const newStart = this.subtractDaysFromDate(startDate, days);
+          newSettings.customPeriodStart = this.toISOString(newStart);
+          newSettings.currentYear = newStart.year;
+        }
+        break;
+      }
+    }
+
+    this.config.settings = newSettings;
+    await this.config.onSettingsChange(newSettings);
+    this.render();
+  }
+
+  /**
+   * Navigate to next period based on view mode
+   */
+  private async navigateNext(): Promise<void> {
+    if (!this.config) return;
+
+    const { currentView, currentYear, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
+    let newSettings = { ...this.config.settings };
+
+    switch (currentView) {
+      case 'life':
+        // Life view doesn't navigate - already shows everything
+        return;
+      case 'annual':
+        newSettings.currentYear = currentYear + 1;
+        this.config.service.setYear(currentYear + 1);
+        break;
+      case 'quarter':
+        if (currentQuarter < 4) {
+          newSettings.currentQuarter = currentQuarter + 1;
+        } else {
+          newSettings.currentQuarter = 1;
+          newSettings.currentYear = currentYear + 1;
+        }
+        break;
+      case 'month':
+        if (currentMonth < 12) {
+          newSettings.currentMonth = currentMonth + 1;
+        } else {
+          newSettings.currentMonth = 1;
+          newSettings.currentYear = currentYear + 1;
+        }
+        break;
+      case 'custom': {
+        const parsed = parseCustomPeriod(customPeriodString);
+        const startDate = this.parseISODate(customPeriodStart);
+        if (parsed && startDate) {
+          const days = parsed.days || (parsed.months || 1) * 30;
+          const newStart = this.addDaysToDate(startDate, days + 1); // +1 to move to next period
+          newSettings.customPeriodStart = this.toISOString(newStart);
+          newSettings.currentYear = newStart.year;
+        }
+        break;
+      }
+    }
+
+    this.config.settings = newSettings;
+    await this.config.onSettingsChange(newSettings);
+    this.render();
+  }
+
+  /**
+   * Subtract days from a date
+   */
+  private subtractDaysFromDate(date: LocalDate, days: number): LocalDate {
+    const d = new Date(date.year, date.month - 1, date.day);
+    d.setDate(d.getDate() - days);
+    return createLocalDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  }
+
+  /**
+   * Convert LocalDate to ISO string
+   */
+  private toISOString(date: LocalDate): string {
+    return `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
+  }
+
+  /**
+   * Navigate to today's period
+   */
+  private async navigateToToday(): Promise<void> {
+    if (!this.config) return;
+
+    const today = new Date();
+    const todayISO = today.toISOString().split('T')[0];
+    const newSettings = {
+      ...this.config.settings,
+      currentYear: today.getFullYear(),
+      currentMonth: today.getMonth() + 1,
+      currentQuarter: Math.ceil((today.getMonth() + 1) / 3),
+      customPeriodStart: todayISO,
+    };
+
+    this.config.settings = newSettings;
+    this.config.service.goToToday();
+    await this.config.onSettingsChange(newSettings);
+    this.render();
   }
 
   /**
@@ -366,14 +576,30 @@ export class RadialCalendarView extends ItemView {
     svg.setAttribute('class', 'rc-svg');
     this.svgEl = svg;
 
-    const isLifeView = this.config.settings.currentView === 'life';
+    const { currentView, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
 
-    if (isLifeView) {
-      // Nested Clock: Life ring outer, Year ring inner
-      this.renderNestedClock(svg, year);
-    } else {
-      // Annual View: Full year with optional folder rings
-      this.renderAnnualView(svg, year);
+    switch (currentView) {
+      case 'life':
+        // Nested Clock: Life ring outer, Year ring inner
+        this.renderNestedClock(svg, year);
+        break;
+      case 'quarter':
+        // Quarter View: 3 months (~90 days)
+        this.renderQuarterView(svg, year, currentQuarter);
+        break;
+      case 'month':
+        // Month View: Single month (28-31 days)
+        this.renderMonthView(svg, year, currentMonth);
+        break;
+      case 'custom':
+        // Custom Period View: User-defined period (e.g., 10d, 3m)
+        this.renderCustomView(svg, customPeriodString, customPeriodStart);
+        break;
+      case 'annual':
+      default:
+        // Annual View: Full year with optional folder rings
+        this.renderAnnualView(svg, year);
+        break;
     }
 
     wrapper.appendChild(svg);
@@ -1628,21 +1854,36 @@ export class RadialCalendarView extends ItemView {
     this.renderBackgroundCircle(svg);
 
     // Get enabled rings sorted by order (0 = outermost)
-    // Always includes Daily Notes ring (shows all entries if no folder configured)
+    // Now includes Global Ring from settings (if enabled)
     const enabledRings = this.getEnabledRingsSorted();
 
-    // Calculate ring radii based on number of rings
-    const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
+    // Find Global Ring from settings
+    const globalRing = enabledRings.find(r => r.ringType === 'global');
 
-    // Render each ring
-    for (const ring of enabledRings) {
-      const radii = ringRadiiMap.get(ring.order);
-      if (radii) {
+    // Load showInAnnual arcs only if Global Ring is enabled
+    const showInAnnualArcs = globalRing ? this.loadShowInAnnualArcs(year) : [];
+
+    // Calculate ring radii for all rings (including Global Ring)
+    const totalRings = enabledRings.length;
+    const ringRadiiMap = this.calculateRingRadii(totalRings);
+
+    // Render each ring (use index for radii lookup, not ring.order)
+    enabledRings.forEach((ring, index) => {
+      const radii = ringRadiiMap.get(index);
+      if (!radii) return;
+
+      if (ring.ringType === 'global') {
+        // Render Global Ring using showInAnnual method
+        if (showInAnnualArcs.length > 0) {
+          this.renderShowInAnnualRing(svg, showInAnnualArcs, radii);
+        }
+      } else {
+        // Render regular ring
         this.renderRing(svg, year, ring, radii);
-        // Render separator circle at inner edge of this ring
-        this.renderRingSeparator(svg, radii.innerRadius);
       }
-    }
+      // Render separator circle at inner edge of this ring
+      this.renderRingSeparator(svg, radii.innerRadius);
+    });
 
     // Render month separators (spanning all rings including label ring)
     for (let month = 1; month <= 12; month++) {
@@ -1670,6 +1911,965 @@ export class RadialCalendarView extends ItemView {
     // Render year boundary marker (between Dec 31 and Jan 1)
     this.renderYearBoundaryMarker(svg);
   }
+
+  // ============================================================================
+  // Month View
+  // ============================================================================
+
+  /**
+   * Renders the month view (single month with days as segments)
+   */
+  private renderMonthView(svg: SVGSVGElement, year: number, month: number): void {
+    // Background circle
+    this.renderBackgroundCircle(svg);
+
+    const daysInMonth = getDaysInMonth(year, month);
+    const today = getToday();
+    const isCurrentMonth = today.year === year && today.month === month;
+
+    // Get enabled rings sorted by order
+    const enabledRings = this.getEnabledRingsSorted();
+    const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
+
+    // Render each ring with month-clipped data (use index for radii lookup)
+    enabledRings.forEach((ring, index) => {
+      const radii = ringRadiiMap.get(index);
+      if (!radii) return;
+
+      if (ring.ringType === 'global') {
+        // Render Global Ring (showInAnnual) clipped to this month
+        const showInAnnualArcs = this.loadShowInAnnualArcs(year);
+        const monthArcs = this.clipArcsToMonth(showInAnnualArcs, year, month);
+        if (monthArcs.length > 0) {
+          this.renderMonthArcs(svg, monthArcs, radii, year, month);
+        }
+      } else {
+        // Render regular ring for this month
+        this.renderMonthRing(svg, year, month, ring, radii);
+      }
+      this.renderRingSeparator(svg, radii.innerRadius);
+    });
+
+    // Render day separators
+    for (let day = 1; day <= daysInMonth; day++) {
+      const angle = this.dayToAngleInMonth(day, daysInMonth);
+      this.renderDaySeparator(svg, angle);
+    }
+
+    // Render separator circle between data rings and label ring
+    this.renderLabelRingSeparator(svg);
+
+    // Render day labels around the edge
+    this.renderDayLabels(svg, daysInMonth);
+
+    // Render center with month info
+    this.renderMonthCenter(svg, year, month);
+
+    // Render today marker
+    if (isCurrentMonth) {
+      this.renderTodayMarkerInMonth(svg, today.day, daysInMonth);
+    }
+  }
+
+  /**
+   * Renders a single ring for month view
+   */
+  private renderMonthRing(
+    svg: SVGSVGElement,
+    year: number,
+    month: number,
+    ring: RingConfig,
+    radii: RingRadii
+  ): void {
+    if (!this.config) return;
+
+    const daysInMonth = getDaysInMonth(year, month);
+    const today = getToday();
+    const folder = ring.folder;
+
+    // Get entries for each day in this month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = createLocalDate(year, month, day);
+      const entries = folder
+        ? this.config.service.getEntriesForDateInFolder(date, folder)
+        : this.config.service.getEntriesForDate(date);
+
+      const startAngle = this.dayToAngleInMonth(day, daysInMonth);
+      const endAngle = this.dayToAngleInMonth(day + 1, daysInMonth) - 0.005; // Small gap
+
+      const hasEntries = entries.length > 0;
+      const isToday = today.year === year && today.month === month && today.day === day;
+      const isWeekend = getWeekday(date) === 0 || getWeekday(date) === 6;
+
+      // Render day arc
+      const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arc.setAttribute('d', path);
+
+      let className = 'rc-day-arc';
+      if (hasEntries) className += ' rc-day-arc--has-entries';
+      if (isToday) className += ' rc-day-arc--today';
+      if (isWeekend) className += ' rc-day-arc--weekend';
+      arc.setAttribute('class', className);
+
+      if (hasEntries) {
+        arc.setAttribute('fill', RING_COLORS[ring.color]);
+      }
+
+      // Add tooltip and click handler
+      arc.addEventListener('mouseenter', (e) => {
+        this.showTooltip(e as MouseEvent, date, entries);
+      });
+      arc.addEventListener('mouseleave', () => this.hideTooltip());
+      arc.addEventListener('click', () => {
+        if (entries.length > 0) {
+          this.config?.openFile(entries[0].filePath);
+        } else {
+          this.createDailyNote(date);
+        }
+      });
+
+      svg.appendChild(arc);
+    }
+  }
+
+  /**
+   * Converts a day number to an angle in month view (day 1 = top)
+   */
+  private dayToAngleInMonth(day: number, daysInMonth: number): number {
+    // Start at top (12 o'clock), go clockwise
+    // Don't subtract PI/2 here - createArcPath already does that
+    return ((day - 1) / daysInMonth) * 2 * Math.PI;
+  }
+
+  /**
+   * Renders day separator lines
+   */
+  private renderDaySeparator(svg: SVGSVGElement, angle: number): void {
+    // Convert logical angle (0=top) to SVG angle (0=right)
+    const svgAngle = angle - Math.PI / 2;
+    const x1 = CENTER + INNER_RADIUS * Math.cos(svgAngle);
+    const y1 = CENTER + INNER_RADIUS * Math.sin(svgAngle);
+    const x2 = CENTER + OUTER_RADIUS * Math.cos(svgAngle);
+    const y2 = CENTER + OUTER_RADIUS * Math.sin(svgAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-month-separator');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Renders day labels around the edge for month view
+   */
+  private renderDayLabels(svg: SVGSVGElement, daysInMonth: number): void {
+    const labelRadius = MONTH_LABEL_RADIUS;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const logicalAngle = this.dayToAngleInMonth(day, daysInMonth) + (Math.PI / daysInMonth); // Center in segment
+      const svgAngle = logicalAngle - Math.PI / 2; // Convert to SVG coordinates
+      const x = CENTER + labelRadius * Math.cos(svgAngle);
+      const y = CENTER + labelRadius * Math.sin(svgAngle);
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', String(x));
+      text.setAttribute('y', String(y));
+      text.setAttribute('class', 'rc-month-day-label');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.textContent = String(day);
+
+      svg.appendChild(text);
+    }
+  }
+
+  /**
+   * Renders the center circle with month info
+   */
+  private renderMonthCenter(svg: SVGSVGElement, year: number, month: number): void {
+    // Background circle
+    const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    bgCircle.setAttribute('cx', String(CENTER));
+    bgCircle.setAttribute('cy', String(CENTER));
+    bgCircle.setAttribute('r', String(INNER_RADIUS - 10));
+    bgCircle.setAttribute('class', 'rc-center-bg');
+    svg.appendChild(bgCircle);
+
+    // Month name
+    const monthName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    monthName.setAttribute('x', String(CENTER));
+    monthName.setAttribute('y', String(CENTER - 10));
+    monthName.setAttribute('class', 'rc-center-title');
+    monthName.setAttribute('text-anchor', 'middle');
+    monthName.setAttribute('dominant-baseline', 'central');
+    monthName.textContent = FULL_MONTH_NAMES[month - 1];
+    svg.appendChild(monthName);
+
+    // Year
+    const yearText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yearText.setAttribute('x', String(CENTER));
+    yearText.setAttribute('y', String(CENTER + 15));
+    yearText.setAttribute('class', 'rc-center-subtitle');
+    yearText.setAttribute('text-anchor', 'middle');
+    yearText.setAttribute('dominant-baseline', 'central');
+    yearText.textContent = String(year);
+    svg.appendChild(yearText);
+  }
+
+  /**
+   * Renders today marker in month view
+   */
+  private renderTodayMarkerInMonth(svg: SVGSVGElement, day: number, daysInMonth: number): void {
+    const logicalAngle = this.dayToAngleInMonth(day, daysInMonth) + (Math.PI / daysInMonth);
+    const svgAngle = logicalAngle - Math.PI / 2;
+    const x1 = CENTER + (INNER_RADIUS - 5) * Math.cos(svgAngle);
+    const y1 = CENTER + (INNER_RADIUS - 5) * Math.sin(svgAngle);
+    const x2 = CENTER + (OUTER_RADIUS + 5) * Math.cos(svgAngle);
+    const y2 = CENTER + (OUTER_RADIUS + 5) * Math.sin(svgAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-today-marker');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Clips arcs to only show the portion within a specific month
+   */
+  private clipArcsToMonth(arcs: RenderedSegment[], year: number, month: number): RenderedSegment[] {
+    const monthStart = createLocalDate(year, month, 1);
+    const daysInMonth = getDaysInMonth(year, month);
+    const monthEnd = createLocalDate(year, month, daysInMonth);
+
+    return arcs.filter(arc => {
+      if (!arc.startDate || !arc.endDate) return false;
+      const arcStart = createLocalDate(arc.startDate.year, arc.startDate.month, arc.startDate.day);
+      const arcEnd = createLocalDate(arc.endDate.year, arc.endDate.month, arc.endDate.day);
+      // Check if arc overlaps with this month
+      return !(arcEnd.year < year || (arcEnd.year === year && arcEnd.month < month) ||
+               arcStart.year > year || (arcStart.year === year && arcStart.month > month));
+    });
+  }
+
+  /**
+   * Renders arcs clipped to a month view
+   */
+  private renderMonthArcs(
+    svg: SVGSVGElement,
+    arcs: RenderedSegment[],
+    radii: RingRadii,
+    year: number,
+    month: number
+  ): void {
+    const daysInMonth = getDaysInMonth(year, month);
+
+    for (const arc of arcs) {
+      if (!arc.startDate || !arc.endDate) continue;
+
+      // Calculate start/end days within this month
+      let startDay = 1;
+      let endDay = daysInMonth;
+
+      const arcStart = createLocalDate(arc.startDate.year, arc.startDate.month, arc.startDate.day);
+      const arcEnd = createLocalDate(arc.endDate.year, arc.endDate.month, arc.endDate.day);
+
+      if (arcStart.year === year && arcStart.month === month) {
+        startDay = arcStart.day;
+      }
+      if (arcEnd.year === year && arcEnd.month === month) {
+        endDay = arcEnd.day;
+      }
+
+      const startAngle = this.dayToAngleInMonth(startDay, daysInMonth);
+      const endAngle = this.dayToAngleInMonth(endDay + 1, daysInMonth) - 0.005;
+
+      const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+      const arcEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arcEl.setAttribute('d', path);
+      arcEl.setAttribute('fill', arc.color);
+      arcEl.setAttribute('class', 'rc-spanning-arc');
+
+      if (arc.opacity !== undefined) {
+        arcEl.setAttribute('opacity', String(arc.opacity / 100));
+      }
+
+      // Tooltip
+      arcEl.addEventListener('mouseenter', (e) => {
+        this.showArcTooltip(e as MouseEvent, arc);
+      });
+      arcEl.addEventListener('mouseleave', () => this.hideTooltip());
+      arcEl.addEventListener('click', () => {
+        if (arc.filePath) {
+          this.config?.openFile(arc.filePath);
+        }
+      });
+
+      svg.appendChild(arcEl);
+    }
+  }
+
+  // ============================================================================
+  // Quarter View
+  // ============================================================================
+
+  /**
+   * Renders the quarter view (3 months with weeks/days as segments)
+   */
+  private renderQuarterView(svg: SVGSVGElement, year: number, quarter: number): void {
+    // Background circle
+    this.renderBackgroundCircle(svg);
+
+    // Calculate quarter start/end months
+    const startMonth = (quarter - 1) * 3 + 1; // Q1=1, Q2=4, Q3=7, Q4=10
+    const endMonth = startMonth + 2;
+
+    // Calculate total days in quarter
+    let totalDays = 0;
+    for (let m = startMonth; m <= endMonth; m++) {
+      totalDays += getDaysInMonth(year, m);
+    }
+
+    const today = getToday();
+
+    // Get enabled rings sorted by order
+    const enabledRings = this.getEnabledRingsSorted();
+    const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
+
+    // Render each ring with quarter-clipped data (use index for radii lookup)
+    enabledRings.forEach((ring, index) => {
+      const radii = ringRadiiMap.get(index);
+      if (!radii) return;
+
+      if (ring.ringType === 'global') {
+        // Render Global Ring (showInAnnual) clipped to this quarter
+        const showInAnnualArcs = this.loadShowInAnnualArcs(year);
+        const quarterArcs = this.clipArcsToQuarter(showInAnnualArcs, year, quarter);
+        if (quarterArcs.length > 0) {
+          this.renderQuarterArcs(svg, quarterArcs, radii, year, quarter, totalDays);
+        }
+      } else {
+        // Render regular ring for this quarter
+        this.renderQuarterRing(svg, year, quarter, ring, radii, totalDays);
+      }
+      this.renderRingSeparator(svg, radii.innerRadius);
+    });
+
+    // Render month separators within quarter
+    let dayOffset = 0;
+    for (let m = startMonth; m <= endMonth; m++) {
+      const angle = this.dayToAngleInQuarter(dayOffset, totalDays);
+      this.renderMonthSeparatorAtAngle(svg, angle);
+      dayOffset += getDaysInMonth(year, m);
+    }
+
+    // Render separator circle between data rings and label ring
+    this.renderLabelRingSeparator(svg);
+
+    // Render month labels for quarter
+    this.renderQuarterMonthLabels(svg, year, startMonth, endMonth, totalDays);
+
+    // Render center with quarter info
+    this.renderQuarterCenter(svg, year, quarter);
+
+    // Render today marker if in this quarter
+    if (today.year === year && today.month >= startMonth && today.month <= endMonth) {
+      let todayDayOffset = 0;
+      for (let m = startMonth; m < today.month; m++) {
+        todayDayOffset += getDaysInMonth(year, m);
+      }
+      todayDayOffset += today.day;
+      this.renderTodayMarkerInQuarter(svg, todayDayOffset, totalDays);
+    }
+  }
+
+  /**
+   * Renders a single ring for quarter view
+   */
+  private renderQuarterRing(
+    svg: SVGSVGElement,
+    year: number,
+    quarter: number,
+    ring: RingConfig,
+    radii: RingRadii,
+    totalDays: number
+  ): void {
+    if (!this.config) return;
+
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 2;
+    const today = getToday();
+    const folder = ring.folder;
+
+    let dayOffset = 0;
+    for (let month = startMonth; month <= endMonth; month++) {
+      const daysInMonth = getDaysInMonth(year, month);
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = createLocalDate(year, month, day);
+        const entries = folder
+          ? this.config.service.getEntriesForDateInFolder(date, folder)
+          : this.config.service.getEntriesForDate(date);
+
+        const startAngle = this.dayToAngleInQuarter(dayOffset, totalDays);
+        const endAngle = this.dayToAngleInQuarter(dayOffset + 1, totalDays) - 0.002;
+
+        const hasEntries = entries.length > 0;
+        const isToday = today.year === year && today.month === month && today.day === day;
+        const isWeekend = getWeekday(date) === 0 || getWeekday(date) === 6;
+
+        const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+        const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        arc.setAttribute('d', path);
+
+        let className = 'rc-day-arc';
+        if (hasEntries) className += ' rc-day-arc--has-entries';
+        if (isToday) className += ' rc-day-arc--today';
+        if (isWeekend) className += ' rc-day-arc--weekend';
+        arc.setAttribute('class', className);
+
+        if (hasEntries) {
+          arc.setAttribute('fill', RING_COLORS[ring.color]);
+        }
+
+        arc.addEventListener('mouseenter', (e) => {
+          this.showTooltip(e as MouseEvent, date, entries);
+        });
+        arc.addEventListener('mouseleave', () => this.hideTooltip());
+        arc.addEventListener('click', () => {
+          if (entries.length > 0) {
+            this.config?.openFile(entries[0].filePath);
+          } else {
+            this.createDailyNote(date);
+          }
+        });
+
+        svg.appendChild(arc);
+        dayOffset++;
+      }
+    }
+  }
+
+  /**
+   * Converts a day offset to an angle in quarter view
+   */
+  private dayToAngleInQuarter(dayOffset: number, totalDays: number): number {
+    // Don't subtract PI/2 here - createArcPath already does that
+    return (dayOffset / totalDays) * 2 * Math.PI;
+  }
+
+  /**
+   * Renders month separator at a specific angle
+   */
+  private renderMonthSeparatorAtAngle(svg: SVGSVGElement, angle: number): void {
+    // Convert logical angle (0=top) to SVG angle (0=right)
+    const svgAngle = angle - Math.PI / 2;
+    const x1 = CENTER + INNER_RADIUS * Math.cos(svgAngle);
+    const y1 = CENTER + INNER_RADIUS * Math.sin(svgAngle);
+    const x2 = CENTER + OUTER_RADIUS * Math.cos(svgAngle);
+    const y2 = CENTER + OUTER_RADIUS * Math.sin(svgAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-month-separator');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Renders month labels for quarter view
+   */
+  private renderQuarterMonthLabels(
+    svg: SVGSVGElement,
+    year: number,
+    startMonth: number,
+    endMonth: number,
+    totalDays: number
+  ): void {
+    const labelRadius = MONTH_LABEL_RADIUS;
+    let dayOffset = 0;
+
+    for (let m = startMonth; m <= endMonth; m++) {
+      const daysInMonth = getDaysInMonth(year, m);
+      const midOffset = dayOffset + daysInMonth / 2;
+      const logicalAngle = this.dayToAngleInQuarter(midOffset, totalDays);
+      const svgAngle = logicalAngle - Math.PI / 2;
+
+      const x = CENTER + labelRadius * Math.cos(svgAngle);
+      const y = CENTER + labelRadius * Math.sin(svgAngle);
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', String(x));
+      text.setAttribute('y', String(y));
+      text.setAttribute('class', 'rc-month-label');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.textContent = MONTH_NAMES[m - 1];
+
+      svg.appendChild(text);
+      dayOffset += daysInMonth;
+    }
+  }
+
+  /**
+   * Renders the center circle with quarter info
+   */
+  private renderQuarterCenter(svg: SVGSVGElement, year: number, quarter: number): void {
+    const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    bgCircle.setAttribute('cx', String(CENTER));
+    bgCircle.setAttribute('cy', String(CENTER));
+    bgCircle.setAttribute('r', String(INNER_RADIUS - 10));
+    bgCircle.setAttribute('class', 'rc-center-bg');
+    svg.appendChild(bgCircle);
+
+    const quarterText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    quarterText.setAttribute('x', String(CENTER));
+    quarterText.setAttribute('y', String(CENTER - 10));
+    quarterText.setAttribute('class', 'rc-center-title');
+    quarterText.setAttribute('text-anchor', 'middle');
+    quarterText.setAttribute('dominant-baseline', 'central');
+    quarterText.textContent = `Q${quarter}`;
+    svg.appendChild(quarterText);
+
+    const yearText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yearText.setAttribute('x', String(CENTER));
+    yearText.setAttribute('y', String(CENTER + 15));
+    yearText.setAttribute('class', 'rc-center-subtitle');
+    yearText.setAttribute('text-anchor', 'middle');
+    yearText.setAttribute('dominant-baseline', 'central');
+    yearText.textContent = String(year);
+    svg.appendChild(yearText);
+  }
+
+  /**
+   * Renders today marker in quarter view
+   */
+  private renderTodayMarkerInQuarter(svg: SVGSVGElement, dayOffset: number, totalDays: number): void {
+    const logicalAngle = this.dayToAngleInQuarter(dayOffset - 0.5, totalDays);
+    const svgAngle = logicalAngle - Math.PI / 2;
+    const x1 = CENTER + (INNER_RADIUS - 5) * Math.cos(svgAngle);
+    const y1 = CENTER + (INNER_RADIUS - 5) * Math.sin(svgAngle);
+    const x2 = CENTER + (OUTER_RADIUS + 5) * Math.cos(svgAngle);
+    const y2 = CENTER + (OUTER_RADIUS + 5) * Math.sin(svgAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-today-marker');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Clips arcs to only show the portion within a specific quarter
+   */
+  private clipArcsToQuarter(arcs: RenderedSegment[], year: number, quarter: number): RenderedSegment[] {
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 2;
+
+    return arcs.filter(arc => {
+      if (!arc.startDate || !arc.endDate) return false;
+      const arcStart = createLocalDate(arc.startDate.year, arc.startDate.month, arc.startDate.day);
+      const arcEnd = createLocalDate(arc.endDate.year, arc.endDate.month, arc.endDate.day);
+      // Check if arc overlaps with this quarter
+      const quarterStart = createLocalDate(year, startMonth, 1);
+      const quarterEnd = createLocalDate(year, endMonth, getDaysInMonth(year, endMonth));
+      return !(arcEnd.year < year || (arcEnd.year === year && arcEnd.month < startMonth) ||
+               arcStart.year > year || (arcStart.year === year && arcStart.month > endMonth));
+    });
+  }
+
+  /**
+   * Renders arcs clipped to a quarter view
+   */
+  private renderQuarterArcs(
+    svg: SVGSVGElement,
+    arcs: RenderedSegment[],
+    radii: RingRadii,
+    year: number,
+    quarter: number,
+    totalDays: number
+  ): void {
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 2;
+
+    for (const arc of arcs) {
+      if (!arc.startDate || !arc.endDate) continue;
+
+      const arcStart = createLocalDate(arc.startDate.year, arc.startDate.month, arc.startDate.day);
+      const arcEnd = createLocalDate(arc.endDate.year, arc.endDate.month, arc.endDate.day);
+
+      // Calculate day offset for start/end within quarter
+      let startDayOffset = 0;
+      let endDayOffset = totalDays;
+
+      // Calculate actual start offset
+      if (arcStart.year === year && arcStart.month >= startMonth && arcStart.month <= endMonth) {
+        for (let m = startMonth; m < arcStart.month; m++) {
+          startDayOffset += getDaysInMonth(year, m);
+        }
+        startDayOffset += arcStart.day - 1;
+      }
+
+      // Calculate actual end offset
+      if (arcEnd.year === year && arcEnd.month >= startMonth && arcEnd.month <= endMonth) {
+        endDayOffset = 0;
+        for (let m = startMonth; m < arcEnd.month; m++) {
+          endDayOffset += getDaysInMonth(year, m);
+        }
+        endDayOffset += arcEnd.day;
+      }
+
+      const startAngle = this.dayToAngleInQuarter(startDayOffset, totalDays);
+      const endAngle = this.dayToAngleInQuarter(endDayOffset, totalDays) - 0.002;
+
+      const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+      const arcEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arcEl.setAttribute('d', path);
+      arcEl.setAttribute('fill', arc.color);
+      arcEl.setAttribute('class', 'rc-spanning-arc');
+
+      if (arc.opacity !== undefined) {
+        arcEl.setAttribute('opacity', String(arc.opacity / 100));
+      }
+
+      arcEl.addEventListener('mouseenter', (e) => {
+        this.showArcTooltip(e as MouseEvent, arc);
+      });
+      arcEl.addEventListener('mouseleave', () => this.hideTooltip());
+      arcEl.addEventListener('click', () => {
+        if (arc.filePath) {
+          this.config?.openFile(arc.filePath);
+        }
+      });
+
+      svg.appendChild(arcEl);
+    }
+  }
+
+  // ============================================================================
+  // Custom Period View
+  // ============================================================================
+
+  /**
+   * Renders the custom period view (user-defined period like 10d, 3m, 2w)
+   */
+  private renderCustomView(svg: SVGSVGElement, periodString: string, startDateISO: string): void {
+    // Background circle
+    this.renderBackgroundCircle(svg);
+
+    const parsed = parseCustomPeriod(periodString);
+    const startDate = this.parseISODate(startDateISO);
+    if (!parsed || !startDate) {
+      // Fallback to showing "Invalid Period" in center
+      this.renderCustomCenter(svg, 'Invalid', periodString);
+      return;
+    }
+
+    const totalDays = parsed.days || (parsed.months || 1) * 30;
+    const today = getToday();
+
+    // Get enabled rings sorted by order
+    const enabledRings = this.getEnabledRingsSorted();
+    const ringRadiiMap = this.calculateRingRadii(enabledRings.length);
+
+    // Render each ring (use index for radii lookup)
+    enabledRings.forEach((ring, index) => {
+      const radii = ringRadiiMap.get(index);
+      if (!radii) return;
+
+      if (ring.ringType === 'global') {
+        // Render Global Ring clipped to this period
+        const year = startDate.year;
+        const showInAnnualArcs = this.loadShowInAnnualArcs(year);
+        const periodArcs = this.clipArcsToCustomPeriod(showInAnnualArcs, startDate, totalDays);
+        if (periodArcs.length > 0) {
+          this.renderCustomPeriodArcs(svg, periodArcs, radii, startDate, totalDays);
+        }
+      } else {
+        // Render regular ring for this period
+        this.renderCustomPeriodRing(svg, startDate, totalDays, ring, radii);
+      }
+      this.renderRingSeparator(svg, radii.innerRadius);
+    });
+
+    // Render day separators (only for shorter periods, < 60 days)
+    if (totalDays <= 60) {
+      for (let day = 0; day < totalDays; day++) {
+        const angle = this.dayToAngleInCustomPeriod(day, totalDays);
+        this.renderDaySeparator(svg, angle);
+      }
+    }
+
+    // Render separator circle between data rings and label ring
+    this.renderLabelRingSeparator(svg);
+
+    // Render day/date labels around the edge
+    this.renderCustomPeriodLabels(svg, startDate, totalDays);
+
+    // Render center with period info
+    this.renderCustomCenter(svg, parsed.label, this.formatDateRange(startDate, totalDays));
+
+    // Render today marker if in this period
+    const todayOffset = this.getDayOffsetFromStart(today, startDate);
+    if (todayOffset >= 0 && todayOffset < totalDays) {
+      this.renderTodayMarkerInCustomPeriod(svg, todayOffset, totalDays);
+    }
+  }
+
+  /**
+   * Renders a single ring for custom period view
+   */
+  private renderCustomPeriodRing(
+    svg: SVGSVGElement,
+    startDate: LocalDate,
+    totalDays: number,
+    ring: RingConfig,
+    radii: RingRadii
+  ): void {
+    if (!this.config) return;
+
+    const today = getToday();
+    const folder = ring.folder;
+
+    for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
+      const date = this.addDaysToDate(startDate, dayOffset);
+      const entries = folder
+        ? this.config.service.getEntriesForDateInFolder(date, folder)
+        : this.config.service.getEntriesForDate(date);
+
+      const startAngle = this.dayToAngleInCustomPeriod(dayOffset, totalDays);
+      const endAngle = this.dayToAngleInCustomPeriod(dayOffset + 1, totalDays) - 0.005;
+
+      const hasEntries = entries.length > 0;
+      const isToday = today.year === date.year && today.month === date.month && today.day === date.day;
+      const isWeekend = getWeekday(date) === 0 || getWeekday(date) === 6;
+
+      const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arc.setAttribute('d', path);
+
+      let className = 'rc-day-arc';
+      if (hasEntries) className += ' rc-day-arc--has-entries';
+      if (isToday) className += ' rc-day-arc--today';
+      if (isWeekend) className += ' rc-day-arc--weekend';
+      arc.setAttribute('class', className);
+
+      if (hasEntries) {
+        arc.setAttribute('fill', RING_COLORS[ring.color]);
+      }
+
+      arc.addEventListener('mouseenter', (e) => {
+        this.showTooltip(e as MouseEvent, date, entries);
+      });
+      arc.addEventListener('mouseleave', () => this.hideTooltip());
+      arc.addEventListener('click', () => {
+        if (entries.length > 0) {
+          this.config?.openFile(entries[0].filePath);
+        } else {
+          this.createDailyNote(date);
+        }
+      });
+
+      svg.appendChild(arc);
+    }
+  }
+
+  /**
+   * Converts a day offset to an angle in custom period view
+   */
+  private dayToAngleInCustomPeriod(dayOffset: number, totalDays: number): number {
+    // Logical angle (0=top, 12 o'clock). createArcPath handles SVG conversion.
+    return (dayOffset / totalDays) * 2 * Math.PI;
+  }
+
+  /**
+   * Renders labels around the edge for custom period view
+   */
+  private renderCustomPeriodLabels(svg: SVGSVGElement, startDate: LocalDate, totalDays: number): void {
+    const labelRadius = MONTH_LABEL_RADIUS;
+
+    // For shorter periods, show all days; for longer, show weekly markers
+    const step = totalDays <= 14 ? 1 : totalDays <= 31 ? 7 : Math.ceil(totalDays / 12);
+
+    for (let dayOffset = 0; dayOffset < totalDays; dayOffset += step) {
+      const date = this.addDaysToDate(startDate, dayOffset);
+      const logicalAngle = this.dayToAngleInCustomPeriod(dayOffset + 0.5, totalDays);
+      const svgAngle = logicalAngle - Math.PI / 2;
+      const x = CENTER + labelRadius * Math.cos(svgAngle);
+      const y = CENTER + labelRadius * Math.sin(svgAngle);
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', String(x));
+      text.setAttribute('y', String(y));
+      text.setAttribute('class', 'rc-month-day-label');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+
+      // Show day number or "Mon D" format depending on period length
+      if (totalDays <= 14) {
+        text.textContent = String(date.day);
+      } else {
+        text.textContent = `${MONTH_NAMES[date.month - 1]} ${date.day}`;
+      }
+
+      svg.appendChild(text);
+    }
+  }
+
+  /**
+   * Renders the center circle with custom period info
+   */
+  private renderCustomCenter(svg: SVGSVGElement, title: string, subtitle: string): void {
+    const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    bgCircle.setAttribute('cx', String(CENTER));
+    bgCircle.setAttribute('cy', String(CENTER));
+    bgCircle.setAttribute('r', String(INNER_RADIUS - 10));
+    bgCircle.setAttribute('class', 'rc-center-bg');
+    svg.appendChild(bgCircle);
+
+    const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    titleText.setAttribute('x', String(CENTER));
+    titleText.setAttribute('y', String(CENTER - 10));
+    titleText.setAttribute('class', 'rc-center-title');
+    titleText.setAttribute('text-anchor', 'middle');
+    titleText.setAttribute('dominant-baseline', 'central');
+    titleText.textContent = title;
+    svg.appendChild(titleText);
+
+    const subtitleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    subtitleText.setAttribute('x', String(CENTER));
+    subtitleText.setAttribute('y', String(CENTER + 15));
+    subtitleText.setAttribute('class', 'rc-center-subtitle');
+    subtitleText.setAttribute('text-anchor', 'middle');
+    subtitleText.setAttribute('dominant-baseline', 'central');
+    subtitleText.textContent = subtitle;
+    svg.appendChild(subtitleText);
+  }
+
+  /**
+   * Renders today marker in custom period view
+   */
+  private renderTodayMarkerInCustomPeriod(svg: SVGSVGElement, dayOffset: number, totalDays: number): void {
+    const logicalAngle = this.dayToAngleInCustomPeriod(dayOffset + 0.5, totalDays);
+    const svgAngle = logicalAngle - Math.PI / 2;
+    const x1 = CENTER + (INNER_RADIUS - 5) * Math.cos(svgAngle);
+    const y1 = CENTER + (INNER_RADIUS - 5) * Math.sin(svgAngle);
+    const x2 = CENTER + (OUTER_RADIUS + 5) * Math.cos(svgAngle);
+    const y2 = CENTER + (OUTER_RADIUS + 5) * Math.sin(svgAngle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'rc-today-marker');
+    svg.appendChild(line);
+  }
+
+  /**
+   * Format date range for custom period center display
+   */
+  private formatDateRange(startDate: LocalDate, totalDays: number): string {
+    const endDate = this.addDaysToDate(startDate, totalDays - 1);
+    const startStr = `${MONTH_NAMES[startDate.month - 1]} ${startDate.day}`;
+    const endStr = `${MONTH_NAMES[endDate.month - 1]} ${endDate.day}`;
+    if (startDate.year !== endDate.year) {
+      return `${startStr} ${startDate.year} - ${endStr} ${endDate.year}`;
+    }
+    return `${startStr} - ${endStr}, ${startDate.year}`;
+  }
+
+  /**
+   * Get day offset from start date (for today marker)
+   */
+  private getDayOffsetFromStart(date: LocalDate, startDate: LocalDate): number {
+    const d1 = new Date(date.year, date.month - 1, date.day);
+    const d2 = new Date(startDate.year, startDate.month - 1, startDate.day);
+    return Math.floor((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  /**
+   * Clips arcs to only show the portion within a custom period
+   */
+  private clipArcsToCustomPeriod(arcs: RenderedSegment[], startDate: LocalDate, totalDays: number): RenderedSegment[] {
+    const endDate = this.addDaysToDate(startDate, totalDays - 1);
+
+    return arcs.filter(arc => {
+      if (!arc.startDate || !arc.endDate) return false;
+      const arcStart = createLocalDate(arc.startDate.year, arc.startDate.month, arc.startDate.day);
+      const arcEnd = createLocalDate(arc.endDate.year, arc.endDate.month, arc.endDate.day);
+
+      // Check if arc overlaps with this period
+      const periodStartMs = new Date(startDate.year, startDate.month - 1, startDate.day).getTime();
+      const periodEndMs = new Date(endDate.year, endDate.month - 1, endDate.day).getTime();
+      const arcStartMs = new Date(arcStart.year, arcStart.month - 1, arcStart.day).getTime();
+      const arcEndMs = new Date(arcEnd.year, arcEnd.month - 1, arcEnd.day).getTime();
+
+      return arcEndMs >= periodStartMs && arcStartMs <= periodEndMs;
+    });
+  }
+
+  /**
+   * Renders arcs clipped to a custom period
+   */
+  private renderCustomPeriodArcs(
+    svg: SVGSVGElement,
+    arcs: RenderedSegment[],
+    radii: RingRadii,
+    startDate: LocalDate,
+    totalDays: number
+  ): void {
+    for (const arc of arcs) {
+      if (!arc.startDate || !arc.endDate) continue;
+
+      const arcStart = createLocalDate(arc.startDate.year, arc.startDate.month, arc.startDate.day);
+      const arcEnd = createLocalDate(arc.endDate.year, arc.endDate.month, arc.endDate.day);
+
+      // Calculate day offset for start/end within period
+      let startDayOffset = Math.max(0, this.getDayOffsetFromStart(arcStart, startDate));
+      let endDayOffset = Math.min(totalDays, this.getDayOffsetFromStart(arcEnd, startDate) + 1);
+
+      if (startDayOffset >= totalDays || endDayOffset <= 0) continue;
+
+      const startAngle = this.dayToAngleInCustomPeriod(startDayOffset, totalDays);
+      const endAngle = this.dayToAngleInCustomPeriod(endDayOffset, totalDays) - 0.005;
+
+      const path = this.createArcPath(radii.innerRadius, radii.outerRadius, startAngle, endAngle);
+      const arcEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arcEl.setAttribute('d', path);
+      arcEl.setAttribute('fill', arc.color);
+      arcEl.setAttribute('class', 'rc-spanning-arc');
+
+      if (arc.opacity !== undefined) {
+        arcEl.setAttribute('opacity', String(arc.opacity / 100));
+      }
+
+      arcEl.addEventListener('mouseenter', (e) => {
+        this.showArcTooltip(e as MouseEvent, arc);
+      });
+      arcEl.addEventListener('mouseleave', () => this.hideTooltip());
+      arcEl.addEventListener('click', () => {
+        if (arc.filePath) {
+          this.config?.openFile(arc.filePath);
+        }
+      });
+
+      svg.appendChild(arcEl);
+    }
+  }
+
+  // ============================================================================
+  // Common Rendering Helpers
+  // ============================================================================
 
   /**
    * Renders a marker at the year boundary (top of circle, between Dec 31 and Jan 1)
@@ -1816,41 +3016,34 @@ export class RadialCalendarView extends ItemView {
 
   /**
    * Gets enabled rings sorted by order (0 = outermost, higher = inner)
-   * Always includes Daily Notes ring as order 0 if dailyNoteFolder is configured
-   * Falls back to showing all entries if no folder is configured
-   * Also includes calendar sources with showAsRing enabled
+   * Includes rings from settings (including Global Ring), Daily Notes, and Calendar Sources.
+   * Rings are sorted by their configured order.
    */
   private getEnabledRingsSorted(): RingConfig[] {
     if (!this.config) return [];
 
-    const rings: RingConfig[] = [];
+    // Start with configured rings from settings (includes Global Ring)
+    const configuredRings = this.config.settings.rings
+      .filter(ring => ring.enabled)
+      .map(ring => ({ ...ring })); // Clone to avoid mutation
 
-    // Always include Daily Notes ring as the outermost ring (order 0)
+    // Add Daily Notes ring as a virtual ring after configured rings
     const dailyFolder = this.config.settings.dailyNoteFolder;
-    // Use the configured folder, or empty string to show ALL entries as fallback
-    rings.push({
+    const maxConfiguredOrder = configuredRings.length > 0
+      ? Math.max(...configuredRings.map(r => r.order))
+      : -1;
+
+    configuredRings.push({
       id: '__daily_notes__',
       name: 'Daily Notes',
       folder: dailyFolder?.trim() || '', // Empty string = show all entries
       color: 'blue',
       segmentType: 'daily',
       enabled: true,
-      order: 0,
+      order: maxConfiguredOrder + 1,
     });
 
-    // Add configured rings with adjusted order (shifted by 1 since Daily Notes always exists)
-    const configuredRings = this.config.settings.rings
-      .filter(ring => ring.enabled)
-      .sort((a, b) => a.order - b.order)
-      .map((ring, index) => ({
-        ...ring,
-        order: index + 1, // Always shift by 1 since Daily Notes is always order 0
-      }));
-
-    rings.push(...configuredRings);
-
     // Add calendar sources with showAsRing enabled as virtual rings
-    // Note: showAsRing defaults to true if undefined (for backwards compatibility)
     const calendarSources = this.config.settings.calendarSources || [];
     const calendarRings = calendarSources
       .filter(source => source.enabled && source.showAsRing !== false && source.folder)
@@ -1861,7 +3054,7 @@ export class RadialCalendarView extends ItemView {
         color: source.color,
         segmentType: 'daily' as const,
         enabled: true,
-        order: rings.length + index,
+        order: maxConfiguredOrder + 2 + index,
         // Spanning arcs for multi-day events
         showSpanningArcs: source.showSpanningArcs !== false,
         startDateField: 'radcal-start',
@@ -1870,9 +3063,15 @@ export class RadialCalendarView extends ItemView {
         labelField: 'radcal-label',
       }));
 
-    rings.push(...calendarRings);
+    configuredRings.push(...calendarRings);
 
-    return rings;
+    // Sort by order and re-index to ensure contiguous order values (0, 1, 2, ...)
+    configuredRings.sort((a, b) => a.order - b.order);
+    configuredRings.forEach((ring, index) => {
+      ring.order = index;
+    });
+
+    return configuredRings;
   }
 
   /**
@@ -2003,6 +3202,57 @@ export class RadialCalendarView extends ItemView {
         this.renderRingMonthSegment(svg, year, month, ring, radii, ringColor);
       }
     }
+  }
+
+  /**
+   * Loads all arcs with radcal-showInAnnual: true for the given year
+   */
+  private loadShowInAnnualArcs(year: number): RenderedSegment[] {
+    if (!this.config) return [];
+    const presets = this.config.settings.presets || [];
+    return this.config.service.loadShowInAnnualArcs(year, presets);
+  }
+
+  /**
+   * Renders the showInAnnual ring with global arcs
+   */
+  private renderShowInAnnualRing(
+    svg: SVGSVGElement,
+    arcs: RenderedSegment[],
+    radii: RingRadii
+  ): void {
+    if (!this.config || arcs.length === 0) return;
+
+    // Assign tracks for overlapping arcs
+    const arcsWithTracks = assignTracks(arcs);
+    const trackCount = getMaxTrackCount(arcsWithTracks);
+
+    // Default ring color (gray) - individual arc colors will override
+    const ringColor = RING_COLORS.gray;
+
+    // Create a "virtual" ring config for rendering
+    const virtualRing: RingConfig = {
+      name: 'Global',
+      folder: '',
+      color: 'gray',
+      enabled: true,
+      order: 999,
+      showSpanningArcs: true,
+    };
+
+    // Render each arc
+    for (const arc of arcsWithTracks) {
+      const arcRadii = computeSubRingRadii(
+        radii.outerRadius,
+        radii.innerRadius,
+        trackCount,
+        arc.track
+      );
+      this.renderSpanningArc(svg, arc, arcRadii, virtualRing, ringColor);
+    }
+
+    // Add ring label
+    this.renderRingLabel(svg, 'Global', radii.outerRadius, radii.innerRadius);
   }
 
   /**

@@ -21,6 +21,8 @@ import type {
   CalendarSourceConfig,
   PresetConfig,
   PatternName,
+  MementoRingConfig,
+  MementoRingType,
 } from '../core/domain/types';
 import {
   DEFAULT_RADIAL_SETTINGS,
@@ -71,12 +73,13 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
    */
   private createTabNavigation(containerEl: HTMLElement): void {
     const tabs = [
-      { id: 'general', label: 'Allgemein' },
+      { id: 'general', label: 'General' },
       { id: 'lifeview', label: 'Life View' },
-      { id: 'rings', label: 'Ringe' },
+      { id: 'rings', label: 'Rings' },
+      { id: 'memento', label: 'Memento Mori' },
       { id: 'sync', label: 'Sync' },
-      { id: 'advanced', label: 'Erweitert' },
-      { id: 'help', label: 'Hilfe' },
+      { id: 'advanced', label: 'Advanced' },
+      { id: 'help', label: 'Help' },
     ];
 
     const tabBar = containerEl.createDiv({ cls: 'radcal-settings-tabs' });
@@ -106,6 +109,9 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
         break;
       case 'rings':
         this.renderRingsTab(containerEl);
+        break;
+      case 'memento':
+        this.renderMementoTab(containerEl);
         break;
       case 'sync':
         this.renderSyncTab(containerEl);
@@ -150,6 +156,225 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
   }
 
   /**
+   * Memento Mori Tab: Multi-ring time visualization settings
+   */
+  private renderMementoTab(containerEl: HTMLElement): void {
+    containerEl.createEl('h3', { text: 'Memento Mori' });
+    containerEl.createEl('p', {
+      text: 'Konfiguriere die Zeit-Ringe für die Memento Mori Ansicht.',
+      cls: 'setting-item-description'
+    });
+
+    // Get rings sorted by order
+    const rings = [...this.plugin.settings.mementoMori.rings].sort((a, b) => a.order - b.order);
+
+    // Ring list container
+    const ringListEl = containerEl.createDiv({ cls: 'memento-ring-list' });
+
+    for (let i = 0; i < rings.length; i++) {
+      const ring = rings[i];
+      this.createMementoRingItem(ringListEl, ring, i, rings.length);
+    }
+
+    // Codeblock Syntax Instructions
+    containerEl.createEl('hr');
+    containerEl.createEl('h4', { text: 'Zeitblöcke in Periodic Notes' });
+    containerEl.createEl('p', {
+      text: 'Füge diese Codeblöcke in deine Periodic Notes ein, um Zeitblöcke in den Ringen anzuzeigen:',
+      cls: 'setting-item-description'
+    });
+
+    // Daily syntax
+    const dailySyntax = containerEl.createDiv({ cls: 'memento-syntax-block' });
+    dailySyntax.createEl('strong', { text: 'Daily Note:' });
+    dailySyntax.createEl('pre', {
+      text: '```radcal\ntype: day\n09:00-10:00 blue: Meeting\n14:00-16:00 orange: Projektarbeit\n```'
+    });
+
+    // Weekly syntax
+    const weeklySyntax = containerEl.createDiv({ cls: 'memento-syntax-block' });
+    weeklySyntax.createEl('strong', { text: 'Weekly Note:' });
+    weeklySyntax.createEl('pre', {
+      text: '```radcal\ntype: week\nMo 09:00-17:00 blue: Arbeit\nMi 14:00-15:00 green: Team Meeting\nSa 10:00-12:00 orange: Sport\n```'
+    });
+
+    // Monthly syntax
+    const monthlySyntax = containerEl.createDiv({ cls: 'memento-syntax-block' });
+    monthlySyntax.createEl('strong', { text: 'Monthly Note:' });
+    monthlySyntax.createEl('pre', {
+      text: '```radcal\ntype: month\n15 red: Zahnarzt\n20-22 blue: Konferenz\n25 green: Weihnachten\n```'
+    });
+
+    containerEl.createEl('p', {
+      text: 'Farben: blue, green, red, orange, purple, yellow, cyan, pink, teal, lime, amber, indigo',
+      cls: 'setting-item-description'
+    });
+
+    containerEl.createEl('p', {
+      text: 'Hinweis: Das Periodic Notes Plugin muss installiert und konfiguriert sein.',
+      cls: 'setting-item-description mod-warning'
+    });
+
+    // Reset to defaults button
+    containerEl.createEl('hr');
+    new Setting(containerEl)
+      .setName('Auf Standardwerte zurücksetzen')
+      .setDesc('Setzt alle Memento Mori Einstellungen auf die Standardwerte zurück.')
+      .addButton(btn => btn
+        .setButtonText('Zurücksetzen')
+        .onClick(async () => {
+          const { DEFAULT_MEMENTO_MORI_SETTINGS } = await import('../core/domain/types');
+          this.plugin.settings.mementoMori = { ...DEFAULT_MEMENTO_MORI_SETTINGS };
+          await this.plugin.saveSettings();
+          this.display();
+          new Notice('Memento Mori Einstellungen zurückgesetzt');
+        })
+      );
+  }
+
+  /**
+   * Creates a single Memento ring configuration item
+   */
+  private createMementoRingItem(
+    container: HTMLElement,
+    ring: MementoRingConfig,
+    index: number,
+    total: number
+  ): void {
+    const ringEl = container.createDiv({ cls: 'memento-ring-item' });
+
+    // Left side: arrows for reordering
+    const arrowsEl = ringEl.createDiv({ cls: 'memento-ring-arrows' });
+
+    // Up arrow (not for first item)
+    const upBtn = arrowsEl.createEl('button', {
+      text: '↑',
+      cls: 'memento-arrow-btn',
+      attr: { disabled: index === 0 ? 'true' : undefined }
+    });
+    upBtn.addEventListener('click', async () => {
+      if (index > 0) {
+        await this.swapMementoRings(index, index - 1);
+      }
+    });
+
+    // Down arrow (not for last item)
+    const downBtn = arrowsEl.createEl('button', {
+      text: '↓',
+      cls: 'memento-arrow-btn',
+      attr: { disabled: index === total - 1 ? 'true' : undefined }
+    });
+    downBtn.addEventListener('click', async () => {
+      if (index < total - 1) {
+        await this.swapMementoRings(index, index + 1);
+      }
+    });
+
+    // Middle: ring info and toggle
+    const infoEl = ringEl.createDiv({ cls: 'memento-ring-info' });
+
+    // Ring label
+    const labelEl = infoEl.createDiv({ cls: 'memento-ring-label' });
+    labelEl.createEl('strong', { text: ring.label });
+    labelEl.createEl('span', { text: ` (${this.getMementoRingDescription(ring)})`, cls: 'memento-ring-desc' });
+
+    // Custom settings for configurable rings
+    if (ring.id === 'custom-short' && ring.enabled) {
+      const customEl = infoEl.createDiv({ cls: 'memento-ring-custom' });
+      customEl.createEl('span', { text: 'Tage: ' });
+      const input = customEl.createEl('input', {
+        type: 'number',
+        value: String(ring.customDays || 10),
+        cls: 'memento-ring-input'
+      });
+      input.min = '2';
+      input.max = '30';
+      input.addEventListener('change', async () => {
+        const ringIndex = this.plugin.settings.mementoMori.rings.findIndex(r => r.id === ring.id);
+        if (ringIndex >= 0) {
+          this.plugin.settings.mementoMori.rings[ringIndex].customDays = parseInt(input.value) || 10;
+          await this.plugin.saveSettings();
+        }
+      });
+    }
+
+    if (ring.id === 'season' && ring.enabled) {
+      const customEl = infoEl.createDiv({ cls: 'memento-ring-custom' });
+      customEl.createEl('span', { text: 'Monate: ' });
+      const input = customEl.createEl('input', {
+        type: 'number',
+        value: String(ring.customMonths || 3),
+        cls: 'memento-ring-input'
+      });
+      input.min = '1';
+      input.max = '6';
+      input.addEventListener('change', async () => {
+        const ringIndex = this.plugin.settings.mementoMori.rings.findIndex(r => r.id === ring.id);
+        if (ringIndex >= 0) {
+          this.plugin.settings.mementoMori.rings[ringIndex].customMonths = parseInt(input.value) || 3;
+          await this.plugin.saveSettings();
+        }
+      });
+    }
+
+    // Right side: enable toggle
+    const toggleEl = ringEl.createDiv({ cls: 'memento-ring-toggle' });
+    const toggle = toggleEl.createEl('input', {
+      type: 'checkbox',
+      cls: 'checkbox-container'
+    });
+    toggle.checked = ring.enabled;
+    toggle.addEventListener('change', async () => {
+      const ringIndex = this.plugin.settings.mementoMori.rings.findIndex(r => r.id === ring.id);
+      if (ringIndex >= 0) {
+        this.plugin.settings.mementoMori.rings[ringIndex].enabled = toggle.checked;
+        await this.plugin.saveSettings();
+        this.display(); // Refresh to show/hide custom settings
+      }
+    });
+  }
+
+  /**
+   * Swap two Memento rings by their current display order
+   */
+  private async swapMementoRings(indexA: number, indexB: number): Promise<void> {
+    const rings = this.plugin.settings.mementoMori.rings;
+    const sortedRings = [...rings].sort((a, b) => a.order - b.order);
+
+    const ringA = sortedRings[indexA];
+    const ringB = sortedRings[indexB];
+
+    if (ringA && ringB) {
+      // Swap orders
+      const tempOrder = ringA.order;
+      const ringAIndex = rings.findIndex(r => r.id === ringA.id);
+      const ringBIndex = rings.findIndex(r => r.id === ringB.id);
+
+      rings[ringAIndex].order = ringB.order;
+      rings[ringBIndex].order = tempOrder;
+
+      await this.plugin.saveSettings();
+      this.display();
+    }
+  }
+
+  /**
+   * Get human-readable description for a Memento ring type
+   */
+  private getMementoRingDescription(ring: MementoRingConfig): string {
+    switch (ring.id) {
+      case 'hour': return '60 Minuten';
+      case 'day': return '24 Stunden';
+      case 'custom-short': return `${ring.customDays || 10} Tage`;
+      case 'month': return '~30 Tage';
+      case 'season': return `${ring.customMonths || 3} Monate`;
+      case 'year': return '365 Tage';
+      case 'life': return 'Lebensspanne';
+      default: return ring.id;
+    }
+  }
+
+  /**
    * Advanced Tab: Presets, Outer Segments, Center Display, Migration
    */
   private renderAdvancedTab(containerEl: HTMLElement): void {
@@ -182,19 +407,38 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
   private createViewModeSection(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName('View Mode')
-      .setDesc('Switch between Annual and Life view')
+      .setDesc('Switch between different calendar views')
       .addDropdown((dropdown) => {
         dropdown
           .addOption('annual', 'Annual View')
           .addOption('life', 'Life View')
+          .addOption('quarter', 'Quarter View')
+          .addOption('month', 'Month View')
+          .addOption('custom', 'Custom Period')
           .setValue(this.plugin.settings.currentView)
           .onChange(async (value) => {
-            this.plugin.settings.currentView = value as 'annual' | 'life';
+            this.plugin.settings.currentView = value as 'annual' | 'life' | 'quarter' | 'month' | 'custom';
             await this.plugin.saveSettings();
-            // Redisplay to show/hide life view settings
+            // Redisplay to show/hide view-specific settings
             this.display();
           });
       });
+
+    // Custom Period configuration (only show when custom is selected)
+    if (this.plugin.settings.currentView === 'custom') {
+      new Setting(containerEl)
+        .setName('Custom Period')
+        .setDesc('Format: 10d (10 days), 2w (2 weeks), 3m (3 months)')
+        .addText((text) => {
+          text
+            .setPlaceholder('e.g. 10d, 2w, 3m')
+            .setValue(this.plugin.settings.customPeriodString)
+            .onChange(async (value) => {
+              this.plugin.settings.customPeriodString = value;
+              await this.plugin.saveSettings();
+            });
+        });
+    }
   }
 
   /**
@@ -699,6 +943,8 @@ Birthday: 1982-09-24<br>
     ring: RingConfig,
     index: number
   ): void {
+    const isGlobalRing = ring.ringType === 'global';
+
     // Use native <details> for collapsible behavior
     const details = containerEl.createEl('details', { cls: 'radcal-ring-details' });
 
@@ -709,13 +955,49 @@ Birthday: 1982-09-24<br>
     const colorSwatch = summary.createSpan({ cls: 'radcal-ring-swatch' });
     colorSwatch.style.backgroundColor = RING_COLORS[ring.color];
 
-    // Ring title
-    summary.createSpan({ text: ring.name || `Ring ${index + 1}`, cls: 'radcal-ring-title' });
+    // Ring title (with special icon for Global Ring)
+    const titleText = isGlobalRing ? '🌐 ' + ring.name : (ring.name || `Ring ${index + 1}`);
+    summary.createSpan({ text: titleText, cls: 'radcal-ring-title' });
 
-    // Folder info (subtle)
-    if (ring.folder) {
+    // Folder info (subtle) - not for Global Ring
+    if (ring.folder && !isGlobalRing) {
       summary.createSpan({ text: ` — ${ring.folder}`, cls: 'radcal-ring-folder' });
+    } else if (isGlobalRing) {
+      summary.createSpan({ text: ' — Vault-wide (radcal-showInAnnual)', cls: 'radcal-ring-folder' });
     }
+
+    // Order buttons container
+    const orderBtns = summary.createSpan({ cls: 'radcal-ring-order-btns' });
+
+    // Move up button
+    const upBtn = orderBtns.createEl('button', {
+      cls: 'radcal-order-btn',
+      attr: { 'aria-label': 'Move up (outer)' }
+    });
+    upBtn.textContent = '▲';
+    upBtn.disabled = index === 0;
+    upBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (index > 0) {
+        await this.swapRings(index, index - 1);
+      }
+    });
+
+    // Move down button
+    const downBtn = orderBtns.createEl('button', {
+      cls: 'radcal-order-btn',
+      attr: { 'aria-label': 'Move down (inner)' }
+    });
+    downBtn.textContent = '▼';
+    downBtn.disabled = index === this.plugin.settings.rings.length - 1;
+    downBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (index < this.plugin.settings.rings.length - 1) {
+        await this.swapRings(index, index + 1);
+      }
+    });
 
     // Content container
     const ringContainer = details.createDiv({ cls: 'radcal-ring-content' });
@@ -731,32 +1013,45 @@ Birthday: 1982-09-24<br>
             await this.updateRing(index, { name: value });
             // Update summary title
             const titleEl = summary.querySelector('.radcal-ring-title');
-            if (titleEl) titleEl.textContent = value || `Ring ${index + 1}`;
+            if (titleEl) titleEl.textContent = isGlobalRing ? '🌐 ' + value : (value || `Ring ${index + 1}`);
           });
       });
 
-    // Folder input with autocomplete
-    new Setting(ringContainer)
-      .setName('Folder')
-      .setDesc('Folder path in vault')
-      .addText((text) => {
-        text
-          .setPlaceholder('e.g. Projects/2024')
-          .setValue(ring.folder)
-          .onChange(async (value) => {
-            await this.updateRing(index, { folder: value });
-            // Update summary folder info
-            const folderEl = summary.querySelector('.radcal-ring-folder');
-            if (folderEl) {
-              folderEl.textContent = value ? ` — ${value}` : '';
-            }
-          });
-        new FolderSuggest(this.app, text.inputEl);
-      });
+    // Folder input with autocomplete - NOT for Global Ring
+    if (!isGlobalRing) {
+      new Setting(ringContainer)
+        .setName('Folder')
+        .setDesc('Folder path in vault')
+        .addText((text) => {
+          text
+            .setPlaceholder('e.g. Projects/2024')
+            .setValue(ring.folder)
+            .onChange(async (value) => {
+              await this.updateRing(index, { folder: value });
+              // Update summary folder info
+              const folderEl = summary.querySelector('.radcal-ring-folder');
+              if (folderEl) {
+                folderEl.textContent = value ? ` — ${value}` : '';
+              }
+            });
+          new FolderSuggest(this.app, text.inputEl);
+        });
+    } else {
+      // Info text for Global Ring
+      const infoEl = ringContainer.createDiv({ cls: 'setting-item-description' });
+      infoEl.innerHTML = `
+        <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+          <strong>Global Ring:</strong> Automatically shows all notes with
+          <code>radcal-showInAnnual: true</code> from the entire vault.<br>
+          No folder configuration needed.
+        </p>
+      `;
+    }
 
     // Color dropdown
     new Setting(ringContainer)
       .setName('Color')
+      .setDesc(isGlobalRing ? 'Default color (individual notes can override)' : undefined)
       .addDropdown((dropdown) => {
         Object.keys(RING_COLORS).forEach((colorName) => {
           dropdown.addOption(colorName, this.formatColorName(colorName));
@@ -770,42 +1065,79 @@ Birthday: 1982-09-24<br>
           });
       });
 
-    // Spanning Arcs toggle
-    new Setting(ringContainer)
-      .setName('Spanning Arcs')
-      .setDesc('Show multi-day events as continuous arcs')
-      .addToggle((toggle) => {
-        toggle
-          .setValue(ring.showSpanningArcs ?? false)
-          .onChange(async (value) => {
-            await this.updateRing(index, { showSpanningArcs: value });
-            this.display();
-          });
-      });
-
-    // Spanning Arcs property fields (conditional)
-    if (ring.showSpanningArcs) {
-      this.createSpanningArcsPropertySettings(ringContainer, ring, index);
+    // Enabled toggle (for Global Ring)
+    if (isGlobalRing) {
+      new Setting(ringContainer)
+        .setName('Enabled')
+        .setDesc('Enable or disable the Global Ring')
+        .addToggle((toggle) => {
+          toggle
+            .setValue(ring.enabled)
+            .onChange(async (value) => {
+              await this.updateRing(index, { enabled: value });
+            });
+        });
     }
 
-    // Delete button
-    new Setting(ringContainer)
-      .addButton((button) => {
-        button
-          .setButtonText('Delete Ring')
-          .setWarning()
-          .onClick(async () => {
-            this.plugin.settings.rings = this.plugin.settings.rings.filter(
-              (_, i) => i !== index
-            );
-            this.plugin.settings.rings = this.plugin.settings.rings.map((r, i) => ({
-              ...r,
-              order: i,
-            }));
-            await this.plugin.saveSettings();
-            this.display();
-          });
-      });
+    // Spanning Arcs toggle - NOT for Global Ring (always uses spanning arcs)
+    if (!isGlobalRing) {
+      new Setting(ringContainer)
+        .setName('Spanning Arcs')
+        .setDesc('Show multi-day events as continuous arcs')
+        .addToggle((toggle) => {
+          toggle
+            .setValue(ring.showSpanningArcs ?? false)
+            .onChange(async (value) => {
+              await this.updateRing(index, { showSpanningArcs: value });
+              this.display();
+            });
+        });
+
+      // Spanning Arcs property fields (conditional)
+      if (ring.showSpanningArcs) {
+        this.createSpanningArcsPropertySettings(ringContainer, ring, index);
+      }
+
+      // Delete button - NOT for Global Ring
+      new Setting(ringContainer)
+        .addButton((button) => {
+          button
+            .setButtonText('Delete Ring')
+            .setWarning()
+            .onClick(async () => {
+              this.plugin.settings.rings = this.plugin.settings.rings.filter(
+                (_, i) => i !== index
+              );
+              this.plugin.settings.rings = this.plugin.settings.rings.map((r, i) => ({
+                ...r,
+                order: i,
+              }));
+              await this.plugin.saveSettings();
+              this.display();
+            });
+        });
+    }
+  }
+
+  /**
+   * Swaps two rings in the array and updates their order
+   */
+  private async swapRings(indexA: number, indexB: number): Promise<void> {
+    const rings = this.plugin.settings.rings;
+    if (indexA < 0 || indexB < 0 || indexA >= rings.length || indexB >= rings.length) {
+      return;
+    }
+
+    // Swap the rings
+    [rings[indexA], rings[indexB]] = [rings[indexB], rings[indexA]];
+
+    // Update order values
+    rings.forEach((ring, i) => {
+      ring.order = i;
+    });
+
+    await this.plugin.saveSettings();
+    this.display();
   }
 
   /**
@@ -1672,7 +2004,11 @@ Birthday: 1982-09-24<br>
 # BASIC PROPERTIES (required for spanning arcs)
 # ─────────────────────────────────────────────
 radcal-start: 2025-01-15        # Start date (YYYY-MM-DD)
-radcal-end: 2025-06-30          # End date (YYYY-MM-DD, optional for ongoing)
+radcal-end: 2025-06-30          # End date (YYYY-MM-DD)
+# radcal-end behavior:
+#   - NOT SET     → Single-day event (showInAnnual) / Ongoing (showInLife)
+#   - EMPTY ("")  → Open-ended (extends to year/life end)
+#   - WITH VALUE  → Fixed end date
 radcal-label: My Event          # Display label (optional, defaults to filename)
 
 # ─────────────────────────────────────────────
@@ -1691,6 +2027,7 @@ radcal-preset: family           # Apply preset (color, pattern, opacity, icon)
 radcal-ring: Wohnorte           # Ring name for grouping in Life View
 radcal-category: Deutschland    # Category within a ring (for sub-grouping)
 radcal-showInLife: true         # Show in Life View (required for files outside lifePhasesFolder)
+radcal-showInAnnual: true       # Show in Annual View (creates a "Global" ring)
 
 # ─────────────────────────────────────────────
 # ANNIVERSARIES (yearly recurring)
@@ -1795,6 +2132,38 @@ radcal-preset: family
 radcal-showInLife: true
 ---`,
         desc: 'Applies preset appearance (color, pattern, icon). Define presets in Settings → Advanced.',
+      },
+      {
+        title: 'Show in Annual View (fixed range)',
+        yaml: `---
+radcal-start: 2025-06-15
+radcal-end: 2025-06-30
+radcal-label: Summer Project
+radcal-color: cyan
+radcal-showInAnnual: true
+---`,
+        desc: 'Fixed date range. Appears on the outermost "Global" ring.',
+      },
+      {
+        title: 'Single-day event',
+        yaml: `---
+radcal-start: 2025-06-15
+radcal-label: Conference
+radcal-color: amber
+radcal-showInAnnual: true
+---`,
+        desc: 'No radcal-end = single day. For Annual View only.',
+      },
+      {
+        title: 'Open-ended event',
+        yaml: `---
+radcal-start: 2025-06-15
+radcal-end:
+radcal-label: Ongoing Project
+radcal-color: green
+radcal-showInAnnual: true
+---`,
+        desc: 'Empty radcal-end = open-ended (extends to year end with fade effect).',
       },
     ];
 

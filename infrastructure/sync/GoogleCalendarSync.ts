@@ -25,6 +25,7 @@ export interface SyncResult {
   eventsCreated: number;
   eventsUpdated: number;
   eventsSkipped: number;
+  eventsDeleted: number;
   errors: string[];
 }
 
@@ -47,6 +48,7 @@ export class GoogleCalendarSync {
       eventsCreated: 0,
       eventsUpdated: 0,
       eventsSkipped: 0,
+      eventsDeleted: 0,
       errors: [],
     };
 
@@ -61,20 +63,37 @@ export class GoogleCalendarSync {
       // Parse events (async to prevent UI blocking)
       const events = await parseICS(icsContent);
 
+      // Build set of current event UIDs for orphan detection
+      const currentUIDs = new Set(events.map(e => e.uid));
+
       // Ensure target folder exists
       await this.ensureFolder(config.folder);
 
-      // Process each event
-      for (const event of events) {
-        try {
-          const eventResult = await this.processEvent(event, config);
-          if (eventResult === 'created') result.eventsCreated++;
-          else if (eventResult === 'updated') result.eventsUpdated++;
-          else result.eventsSkipped++;
-        } catch (e) {
-          result.errors.push(`Event "${event.summary}": ${e instanceof Error ? e.message : String(e)}`);
+      // Process events in batches to prevent UI blocking
+      const BATCH_SIZE = 20;
+      for (let i = 0; i < events.length; i += BATCH_SIZE) {
+        const batch = events.slice(i, i + BATCH_SIZE);
+
+        for (const event of batch) {
+          try {
+            const eventResult = await this.processEvent(event, config);
+            if (eventResult === 'created') result.eventsCreated++;
+            else if (eventResult === 'updated') result.eventsUpdated++;
+            else result.eventsSkipped++;
+          } catch (e) {
+            result.errors.push(`Event "${event.summary}": ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+
+        // Yield to main thread after each batch to keep UI responsive
+        if (i + BATCH_SIZE < events.length) {
+          await this.yieldToMainThread();
         }
       }
+
+      // Detect and move orphaned notes (deleted in Google)
+      const deletedCount = await this.handleOrphanedNotes(config.folder, currentUIDs);
+      result.eventsDeleted = deletedCount;
 
       result.success = true;
     } catch (e) {
@@ -134,6 +153,66 @@ export class GoogleCalendarSync {
   }
 
   /**
+   * Yield to main thread to keep UI responsive
+   * Uses setTimeout(0) to allow pending UI events to process
+   */
+  private yieldToMainThread(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  /**
+   * Handle orphaned notes (events deleted from Google Calendar)
+   * Moves them to a .deleted subfolder instead of permanent deletion
+   */
+  private async handleOrphanedNotes(folderPath: string, currentUIDs: Set<string>): Promise<number> {
+    const folder = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!(folder instanceof TFolder)) return 0;
+
+    let deletedCount = 0;
+    const deletedFolderPath = `${folderPath}/.deleted`;
+
+    // Get all markdown files in the folder (not in .deleted)
+    const files = folder.children.filter(
+      (f): f is TFile => f instanceof TFile && f.extension === 'md'
+    );
+
+    for (const file of files) {
+      try {
+        const content = await this.app.vault.read(file);
+
+        // Extract gcal-uid from frontmatter
+        const uidMatch = content.match(/gcal-uid:\s*"([^"]+)"/);
+        if (!uidMatch) continue; // Not a Google Calendar note
+
+        const uid = uidMatch[1];
+
+        // Check if this event still exists in Google Calendar
+        if (!currentUIDs.has(uid)) {
+          // Event deleted from Google - move to .deleted folder
+          await this.ensureFolder(deletedFolderPath);
+          const newPath = `${deletedFolderPath}/${file.name}`;
+
+          // Check if destination exists and rename if needed
+          let finalPath = newPath;
+          let counter = 1;
+          while (this.app.vault.getAbstractFileByPath(finalPath)) {
+            const baseName = file.basename;
+            finalPath = `${deletedFolderPath}/${baseName}_${counter}.md`;
+            counter++;
+          }
+
+          await this.app.vault.rename(file, finalPath);
+          deletedCount++;
+        }
+      } catch (e) {
+        console.error(`Failed to check orphan status for ${file.path}:`, e);
+      }
+    }
+
+    return deletedCount;
+  }
+
+  /**
    * Fetch ICS content from URL
    */
   private async fetchICS(url: string): Promise<string | null> {
@@ -175,7 +254,8 @@ export class GoogleCalendarSync {
   }
 
   /**
-   * Process a single event
+   * Process a single event with differential sync
+   * Only updates if sequence number changed (event was modified in Google)
    */
   private async processEvent(
     event: ParsedEvent,
@@ -188,26 +268,27 @@ export class GoogleCalendarSync {
     // Check if file exists
     const existingFile = this.app.vault.getAbstractFileByPath(filePath);
 
-    // Generate file content
-    const content = this.generateFileContent(event, config);
-
     if (existingFile instanceof TFile) {
-      // Check if content changed (by comparing UID in frontmatter)
+      // Differential sync: compare sequence number
       const existingContent = await this.app.vault.read(existingFile);
-      if (existingContent.includes(`gcal-uid: "${event.uid}"`)) {
-        // Same event, check if update needed
-        const existingMtime = existingFile.stat.mtime;
-        // Skip if file was modified recently (within 1 hour) - user may have edited
-        if (Date.now() - existingMtime < 60 * 60 * 1000) {
-          return 'skipped';
-        }
+
+      // Extract existing sequence from frontmatter
+      const sequenceMatch = existingContent.match(/gcal-sequence:\s*(\d+)/);
+      const existingSequence = sequenceMatch ? parseInt(sequenceMatch[1], 10) : -1;
+
+      // Skip if sequence hasn't changed (event not modified in Google)
+      if (event.sequence !== undefined && existingSequence === event.sequence) {
+        return 'skipped';
       }
 
+      // Sequence changed or not set - update the file
+      const content = this.generateFileContent(event, config);
       await this.app.vault.modify(existingFile, content);
       return 'updated';
     }
 
     // Create new file
+    const content = this.generateFileContent(event, config);
     await this.app.vault.create(filePath, content);
     return 'created';
   }
@@ -237,9 +318,15 @@ export class GoogleCalendarSync {
     lines.push(`radcal-color: ${config.color}`);
     lines.push(`radcal-label: "${event.summary.replace(/"/g, '\\"')}"`);
 
-    // Google Calendar metadata
+    // Google Calendar metadata for differential sync
     lines.push(`gcal-uid: "${event.uid}"`);
     lines.push(`gcal-source: "${config.name}"`);
+    if (event.sequence !== undefined) {
+      lines.push(`gcal-sequence: ${event.sequence}`);
+    }
+    if (event.lastModified) {
+      lines.push(`gcal-last-modified: "${event.lastModified}"`);
+    }
 
     if (event.isRecurring) {
       lines.push(`gcal-recurring: true`);
