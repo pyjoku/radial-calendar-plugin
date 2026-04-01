@@ -13,7 +13,7 @@ import { parseRadcalConfig } from './RadcalConfigParser';
 import { RadcalRenderer, EntriesByDate } from './RadcalRenderer';
 import { RadcalFilterEngine } from './RadcalFilterEngine';
 import type { RadcalBlockConfig } from '../../core/domain/types/radcal-block';
-import { parseTimeBlock, DayViewRenderChild, WeekViewRenderChild, MonthViewRenderChild, MultiRingRenderChild } from './TimeBlockRenderer';
+import { parseTimeBlock, DayViewRenderChild, WeekViewRenderChild, MonthViewRenderChild, MultiRingRenderChild, parseUnifiedRadcal, UnifiedRingRenderChild } from './TimeBlockRenderer';
 
 /**
  * Render child for radcal codeblocks with live updates
@@ -373,7 +373,18 @@ export class RadcalBlockProcessor {
     ctx: MarkdownPostProcessorContext
   ): void {
     try {
-      // Check if this is a time block type (day/week/month)
+      // NEW: Check for unified ring: syntax
+      const ringMatch = source.match(/^ring:\s*(day|week|month|hour|season|year|life)/im);
+
+      if (ringMatch) {
+        const config = parseUnifiedRadcal(source);
+        const container = el.createDiv({ cls: 'radcal-unified-container' });
+        const renderChild = new UnifiedRingRenderChild(container, config as any);
+        ctx.addChild(renderChild);
+        return;
+      }
+
+      // LEGACY: Check if this is a time block type (day/week/month)
       // Match "type: day" or "type:day" at start of any line
       const typeMatch = source.match(/^type:\s*(day|week|month)/im);
 

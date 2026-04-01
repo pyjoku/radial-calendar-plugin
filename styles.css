@@ -2009,6 +2009,86 @@
 }
 
 /* ============================================
+   UNIFIED RING SYNTAX (ring: day/week/month/life)
+   ============================================ */
+
+.radcal-unified-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.radcal-unified-wrapper {
+  position: relative;
+}
+
+.radcal-unified-svg {
+  display: block;
+}
+
+.radcal-unified-bg {
+  fill: var(--background-secondary);
+}
+
+.radcal-unified-center {
+  fill: var(--background-primary);
+  stroke: var(--background-modifier-border);
+  stroke-width: 1;
+}
+
+.radcal-unified-ring-bg {
+  opacity: 0.3;
+}
+
+.radcal-unified-tick {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.radcal-unified-block {
+  opacity: 0.85;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.radcal-unified-block:hover {
+  opacity: 1;
+  filter: brightness(1.15);
+}
+
+.radcal-unified-now-line {
+  stroke: var(--color-red);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.radcal-unified-center-time {
+  fill: var(--text-normal);
+  font-size: 24px;
+  font-weight: 600;
+  font-family: var(--font-monospace);
+}
+
+.radcal-unified-tooltip {
+  position: absolute;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: var(--shadow-s);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 200px;
+}
+
+.radcal-unified-tooltip strong {
+  color: var(--text-normal);
+}
+
+/* ============================================
    MEMENTO MORI: Multi-Ring Time View
    ============================================ */
 

@@ -12,6 +12,7 @@
 
 import { MarkdownRenderChild, MarkdownPostProcessorContext } from 'obsidian';
 import { RING_COLORS } from '../../core/domain/types';
+import type { UnifiedRadcalConfig, UnifiedRingConfig, UnifiedRingType } from '../../core/domain/types/radcal-block';
 
 // SVG Constants
 const SVG_SIZE = 400;
@@ -1334,6 +1335,560 @@ export class MultiRingRenderChild extends MarkdownRenderChild {
 
       block.addEventListener('mouseleave', () => {
         const tooltip = this.containerEl.querySelector('.radcal-multi-tooltip');
+        if (tooltip) tooltip.remove();
+      });
+    });
+  }
+}
+
+/**
+ * Parse unified radcal syntax with ring: declarations
+ */
+export function parseUnifiedRadcal(source: string): UnifiedRadcalConfig {
+  const config: UnifiedRadcalConfig = { rings: [] };
+  let currentRing: (UnifiedRingConfig & { dayBlocks?: DayTimeBlock[]; weekBlocks?: WeekTimeBlock[]; monthBlocks?: MonthTimeBlock[] }) | null = null;
+
+  const lines = source.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // New ring declaration: "ring: day"
+    const ringMatch = trimmed.match(/^ring:\s*(day|week|month|hour|season|year|life)$/i);
+    if (ringMatch) {
+      if (currentRing) config.rings.push(currentRing);
+      currentRing = {
+        type: ringMatch[1].toLowerCase() as UnifiedRingType,
+        dayBlocks: [],
+        weekBlocks: [],
+        monthBlocks: []
+      };
+      continue;
+    }
+
+    // Global options (before first ring)
+    if (!currentRing) {
+      if (trimmed.match(/^showToday:\s*(true|false)/i)) {
+        config.showToday = trimmed.toLowerCase().includes('true');
+      } else if (trimmed.match(/^year:\s*(\d+)/)) {
+        config.year = parseInt(RegExp.$1, 10);
+      }
+      continue;
+    }
+
+    // Ring options (indented or not)
+    const filterMatch = trimmed.match(/^filter:\s*(.+)$/);
+    if (filterMatch) {
+      currentRing.filter = filterMatch[1];
+      continue;
+    }
+
+    if (trimmed.match(/^showCurrentTime:\s*(true|false)/i)) {
+      currentRing.showCurrentTime = trimmed.toLowerCase().includes('true');
+      continue;
+    }
+
+    if (trimmed.match(/^label:\s*(.+)$/)) {
+      currentRing.label = RegExp.$1.replace(/["']/g, '');
+      continue;
+    }
+
+    if (trimmed.match(/^birthYear:\s*(\d+)/)) {
+      currentRing.birthYear = parseInt(RegExp.$1, 10);
+      continue;
+    }
+
+    if (trimmed.match(/^lifespan:\s*(\d+)/)) {
+      currentRing.lifespan = parseInt(RegExp.$1, 10);
+      continue;
+    }
+
+    // Time block lines based on ring type
+    if (currentRing.type === 'day') {
+      const block = parseDayLine(trimmed);
+      if (block) currentRing.dayBlocks!.push(block);
+    } else if (currentRing.type === 'week') {
+      const block = parseWeekLine(trimmed);
+      if (block) currentRing.weekBlocks!.push(block);
+    } else if (currentRing.type === 'month') {
+      const block = parseMonthLine(trimmed);
+      if (block) currentRing.monthBlocks!.push(block);
+    }
+  }
+
+  if (currentRing) config.rings.push(currentRing);
+  return config;
+}
+
+/**
+ * Unified Ring Render Child - renders multiple ring types in configurable order
+ */
+export class UnifiedRingRenderChild extends MarkdownRenderChild {
+  private updateInterval: number | null = null;
+
+  constructor(
+    containerEl: HTMLElement,
+    private readonly config: UnifiedRadcalConfig & { rings: (UnifiedRingConfig & { dayBlocks?: DayTimeBlock[]; weekBlocks?: WeekTimeBlock[]; monthBlocks?: MonthTimeBlock[] })[] }
+  ) {
+    super(containerEl);
+  }
+
+  onload(): void {
+    this.render();
+    this.updateInterval = window.setInterval(() => this.render(), 60 * 1000);
+  }
+
+  onunload(): void {
+    if (this.updateInterval) {
+      window.clearInterval(this.updateInterval);
+    }
+  }
+
+  private render(): void {
+    this.containerEl.empty();
+
+    const rings = this.config.rings;
+    if (rings.length === 0) {
+      this.containerEl.createEl('p', { text: 'No rings defined.' });
+      return;
+    }
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${SVG_SIZE} ${SVG_SIZE}`);
+    svg.setAttribute('class', 'radcal-unified-svg');
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+    svg.style.maxWidth = '500px';
+
+    // Background
+    const bg = document.createElementNS(SVG_NS, 'circle');
+    bg.setAttribute('cx', String(CENTER));
+    bg.setAttribute('cy', String(CENTER));
+    bg.setAttribute('r', String(OUTER_RADIUS + 10));
+    bg.setAttribute('class', 'radcal-unified-bg');
+    svg.appendChild(bg);
+
+    // Calculate ring dimensions
+    const ringCount = rings.length;
+    const ringWidth = (OUTER_RADIUS - 50) / ringCount;
+
+    // Render rings from innermost (index 0) to outermost
+    rings.forEach((ring, index) => {
+      // Reverse: index 0 = innermost, so outerR starts smaller
+      const reverseIndex = ringCount - 1 - index;
+      const outerR = OUTER_RADIUS - reverseIndex * ringWidth;
+      const innerR = outerR - ringWidth + 5;
+
+      this.renderRing(svg, ring, innerR, outerR);
+    });
+
+    // Center circle
+    const centerR = Math.max(OUTER_RADIUS - ringCount * ringWidth, 40);
+    const center = document.createElementNS(SVG_NS, 'circle');
+    center.setAttribute('cx', String(CENTER));
+    center.setAttribute('cy', String(CENTER));
+    center.setAttribute('r', String(centerR));
+    center.setAttribute('class', 'radcal-unified-center');
+    svg.appendChild(center);
+
+    // Center time
+    this.renderCenterTime(svg);
+
+    const wrapper = this.containerEl.createDiv({ cls: 'radcal-unified-wrapper' });
+    wrapper.appendChild(svg);
+    this.setupTooltips(svg);
+  }
+
+  private renderRing(
+    svg: SVGSVGElement,
+    ring: UnifiedRingConfig & { dayBlocks?: DayTimeBlock[]; weekBlocks?: WeekTimeBlock[]; monthBlocks?: MonthTimeBlock[] },
+    innerR: number,
+    outerR: number
+  ): void {
+    switch (ring.type) {
+      case 'day':
+        this.renderDayRing(svg, ring, innerR, outerR);
+        break;
+      case 'week':
+        this.renderWeekRing(svg, ring, innerR, outerR);
+        break;
+      case 'month':
+        this.renderMonthRing(svg, ring, innerR, outerR);
+        break;
+      case 'hour':
+        this.renderHourRing(svg, innerR, outerR);
+        break;
+      case 'season':
+        this.renderSeasonRing(svg, innerR, outerR);
+        break;
+      case 'year':
+        this.renderYearRing(svg, innerR, outerR);
+        break;
+      case 'life':
+        this.renderLifeRing(svg, ring, innerR, outerR);
+        break;
+    }
+  }
+
+  private renderDayRing(
+    svg: SVGSVGElement,
+    ring: UnifiedRingConfig & { dayBlocks?: DayTimeBlock[] },
+    innerR: number,
+    outerR: number
+  ): void {
+    const now = new Date();
+    const blocks = ring.dayBlocks || [];
+
+    // Background ring
+    this.renderRingBackground(svg, innerR, outerR);
+
+    // Hour markers
+    for (let h = 0; h < 24; h += 3) {
+      const angle = (h / 24) * 2 * Math.PI - Math.PI / 2;
+      this.renderTick(svg, innerR, outerR, angle);
+    }
+
+    // Time blocks
+    for (const block of blocks) {
+      const startAngle = ((block.startHour + block.startMinute / 60) / 24) * 2 * Math.PI - Math.PI / 2;
+      const endAngle = ((block.endHour + block.endMinute / 60) / 24) * 2 * Math.PI - Math.PI / 2;
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', createArcPath(innerR + 2, outerR - 2, startAngle, endAngle));
+      path.setAttribute('class', 'radcal-unified-block');
+      path.setAttribute('fill', RING_COLORS[block.color] || RING_COLORS.blue);
+      path.setAttribute('data-type', 'day');
+      path.setAttribute('data-label', block.label);
+      path.setAttribute('data-time', `${block.startHour}:${String(block.startMinute).padStart(2, '0')} - ${block.endHour}:${String(block.endMinute).padStart(2, '0')}`);
+      svg.appendChild(path);
+    }
+
+    // Current time indicator
+    if (ring.showCurrentTime !== false) {
+      const angle = ((now.getHours() + now.getMinutes() / 60) / 24) * 2 * Math.PI - Math.PI / 2;
+      this.renderNowLine(svg, innerR, outerR, angle);
+    }
+  }
+
+  private renderWeekRing(
+    svg: SVGSVGElement,
+    ring: UnifiedRingConfig & { weekBlocks?: WeekTimeBlock[] },
+    innerR: number,
+    outerR: number
+  ): void {
+    const now = new Date();
+    const blocks = ring.weekBlocks || [];
+    const segmentAngle = (2 * Math.PI) / 7;
+
+    // Background ring
+    this.renderRingBackground(svg, innerR, outerR);
+
+    // Day dividers
+    for (let d = 0; d < 7; d++) {
+      const angle = d * segmentAngle - Math.PI / 2;
+      this.renderTick(svg, innerR, outerR, angle);
+    }
+
+    // Time blocks
+    for (const block of blocks) {
+      const visualDay = (block.dayOfWeek + 6) % 7;
+      const dayStartAngle = visualDay * segmentAngle - Math.PI / 2;
+      const startFraction = (block.startHour + block.startMinute / 60) / 24;
+      const endFraction = (block.endHour + block.endMinute / 60) / 24;
+      const blockStartAngle = dayStartAngle + startFraction * segmentAngle;
+      const blockEndAngle = dayStartAngle + endFraction * segmentAngle;
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', createArcPath(innerR + 2, outerR - 2, blockStartAngle, blockEndAngle));
+      path.setAttribute('class', 'radcal-unified-block');
+      path.setAttribute('fill', RING_COLORS[block.color] || RING_COLORS.blue);
+      path.setAttribute('data-type', 'week');
+      path.setAttribute('data-label', block.label);
+      path.setAttribute('data-day', DAY_LABELS[block.dayOfWeek]);
+      path.setAttribute('data-time', `${block.startHour}:${String(block.startMinute).padStart(2, '0')} - ${block.endHour}:${String(block.endMinute).padStart(2, '0')}`);
+      svg.appendChild(path);
+    }
+
+    // Current day indicator
+    if (ring.showCurrentTime !== false) {
+      const visualDay = (now.getDay() + 6) % 7;
+      const angle = (visualDay + 0.5) * segmentAngle - Math.PI / 2;
+      this.renderNowLine(svg, innerR, outerR, angle);
+    }
+  }
+
+  private renderMonthRing(
+    svg: SVGSVGElement,
+    ring: UnifiedRingConfig & { monthBlocks?: MonthTimeBlock[] },
+    innerR: number,
+    outerR: number
+  ): void {
+    const now = new Date();
+    const blocks = ring.monthBlocks || [];
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const segmentAngle = (2 * Math.PI) / daysInMonth;
+
+    // Background ring
+    this.renderRingBackground(svg, innerR, outerR);
+
+    // Day markers (every 5 days)
+    for (let d = 1; d <= daysInMonth; d += 5) {
+      const angle = (d - 1) * segmentAngle - Math.PI / 2;
+      this.renderTick(svg, innerR, outerR, angle);
+    }
+
+    // Time blocks
+    for (const block of blocks) {
+      const startAngle = (block.dayOfMonth - 1) * segmentAngle - Math.PI / 2;
+      const endDay = block.endDay || block.dayOfMonth;
+      const endAngle = endDay * segmentAngle - Math.PI / 2;
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', createArcPath(innerR + 2, outerR - 2, startAngle, endAngle));
+      path.setAttribute('class', 'radcal-unified-block');
+      path.setAttribute('fill', RING_COLORS[block.color] || RING_COLORS.blue);
+      path.setAttribute('data-type', 'month');
+      path.setAttribute('data-label', block.label);
+      path.setAttribute('data-days', block.endDay ? `${block.dayOfMonth}-${endDay}` : String(block.dayOfMonth));
+      svg.appendChild(path);
+    }
+
+    // Current day indicator
+    if (ring.showCurrentTime !== false) {
+      const angle = (now.getDate() - 0.5) * segmentAngle - Math.PI / 2;
+      this.renderNowLine(svg, innerR, outerR, angle);
+    }
+  }
+
+  private renderHourRing(svg: SVGSVGElement, innerR: number, outerR: number): void {
+    const now = new Date();
+    const totalMinutes = 60;
+    const currentMinute = now.getMinutes();
+
+    // Background ring
+    this.renderRingBackground(svg, innerR, outerR);
+
+    // Past
+    if (currentMinute > 0) {
+      const pastArc = this.createMementoArc(innerR, outerR, 0, currentMinute, totalMinutes);
+      pastArc.setAttribute('class', 'memento-past');
+      svg.appendChild(pastArc);
+    }
+
+    // Present (current minute)
+    const presentArc = this.createMementoArc(innerR, outerR, currentMinute, currentMinute + 1, totalMinutes);
+    presentArc.setAttribute('class', 'memento-present');
+    svg.appendChild(presentArc);
+
+    // Future
+    if (currentMinute + 1 < totalMinutes) {
+      const futureArc = this.createMementoArc(innerR, outerR, currentMinute + 1, totalMinutes, totalMinutes);
+      futureArc.setAttribute('class', 'memento-future');
+      svg.appendChild(futureArc);
+    }
+  }
+
+  private renderSeasonRing(svg: SVGSVGElement, innerR: number, outerR: number): void {
+    const now = new Date();
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (24 * 60 * 60 * 1000));
+    const totalDays = 365;
+
+    // Seasons (roughly 91 days each)
+    const seasons = [
+      { start: 0, end: 91, class: 'memento-season-winter' },
+      { start: 91, end: 182, class: 'memento-season-spring' },
+      { start: 182, end: 273, class: 'memento-season-summer' },
+      { start: 273, end: 365, class: 'memento-season-autumn' }
+    ];
+
+    for (const season of seasons) {
+      const arc = this.createMementoArc(innerR, outerR, season.start, season.end, totalDays);
+      arc.setAttribute('class', season.class);
+      arc.style.opacity = '0.3';
+      svg.appendChild(arc);
+    }
+
+    // Past
+    if (dayOfYear > 0) {
+      const pastArc = this.createMementoArc(innerR, outerR, 0, dayOfYear, totalDays);
+      pastArc.setAttribute('class', 'memento-past');
+      svg.appendChild(pastArc);
+    }
+
+    // Present indicator
+    const angle = (dayOfYear / totalDays) * 2 * Math.PI - Math.PI / 2;
+    this.renderNowLine(svg, innerR, outerR, angle);
+  }
+
+  private renderYearRing(svg: SVGSVGElement, innerR: number, outerR: number): void {
+    const now = new Date();
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (24 * 60 * 60 * 1000));
+    const totalDays = 365;
+
+    // Background ring
+    this.renderRingBackground(svg, innerR, outerR);
+
+    // Past
+    if (dayOfYear > 0) {
+      const pastArc = this.createMementoArc(innerR, outerR, 0, dayOfYear, totalDays);
+      pastArc.setAttribute('class', 'memento-past');
+      svg.appendChild(pastArc);
+    }
+
+    // Present
+    const presentArc = this.createMementoArc(innerR, outerR, dayOfYear, dayOfYear + 1, totalDays);
+    presentArc.setAttribute('class', 'memento-present');
+    svg.appendChild(presentArc);
+
+    // Future
+    if (dayOfYear + 1 < totalDays) {
+      const futureArc = this.createMementoArc(innerR, outerR, dayOfYear + 1, totalDays, totalDays);
+      futureArc.setAttribute('class', 'memento-future');
+      svg.appendChild(futureArc);
+    }
+  }
+
+  private renderLifeRing(
+    svg: SVGSVGElement,
+    ring: UnifiedRingConfig,
+    innerR: number,
+    outerR: number
+  ): void {
+    const now = new Date();
+    const birthYear = ring.birthYear || 1990;
+    const lifespan = ring.lifespan || 80;
+
+    const birthDate = new Date(birthYear, 0, 1);
+    const ageMs = now.getTime() - birthDate.getTime();
+    const ageYears = ageMs / (365.25 * 24 * 60 * 60 * 1000);
+    const currentYear = Math.floor(ageYears);
+    const yearsLived = Math.min(currentYear, lifespan);
+
+    // Background ring
+    this.renderRingBackground(svg, innerR, outerR);
+
+    // Past
+    if (yearsLived > 0) {
+      const pastArc = this.createMementoArc(innerR, outerR, 0, yearsLived, lifespan);
+      pastArc.setAttribute('class', 'memento-past');
+      svg.appendChild(pastArc);
+    }
+
+    // Present (current year)
+    if (currentYear < lifespan) {
+      const presentArc = this.createMementoArc(innerR, outerR, currentYear, currentYear + 1, lifespan);
+      presentArc.setAttribute('class', 'memento-present');
+      svg.appendChild(presentArc);
+    }
+
+    // Future
+    if (currentYear + 1 < lifespan) {
+      const futureArc = this.createMementoArc(innerR, outerR, currentYear + 1, lifespan, lifespan);
+      futureArc.setAttribute('class', 'memento-future');
+      svg.appendChild(futureArc);
+    }
+  }
+
+  // Helper methods
+  private renderRingBackground(svg: SVGSVGElement, innerR: number, outerR: number): void {
+    const bgRing = document.createElementNS(SVG_NS, 'circle');
+    bgRing.setAttribute('cx', String(CENTER));
+    bgRing.setAttribute('cy', String(CENTER));
+    bgRing.setAttribute('r', String((outerR + innerR) / 2));
+    bgRing.setAttribute('fill', 'none');
+    bgRing.setAttribute('stroke', 'var(--background-modifier-border)');
+    bgRing.setAttribute('stroke-width', String(outerR - innerR));
+    bgRing.setAttribute('class', 'radcal-unified-ring-bg');
+    svg.appendChild(bgRing);
+  }
+
+  private renderTick(svg: SVGSVGElement, innerR: number, outerR: number, angle: number): void {
+    const x1 = CENTER + innerR * Math.cos(angle);
+    const y1 = CENTER + innerR * Math.sin(angle);
+    const x2 = CENTER + outerR * Math.cos(angle);
+    const y2 = CENTER + outerR * Math.sin(angle);
+
+    const tick = document.createElementNS(SVG_NS, 'line');
+    tick.setAttribute('x1', String(x1));
+    tick.setAttribute('y1', String(y1));
+    tick.setAttribute('x2', String(x2));
+    tick.setAttribute('y2', String(y2));
+    tick.setAttribute('class', 'radcal-unified-tick');
+    svg.appendChild(tick);
+  }
+
+  private renderNowLine(svg: SVGSVGElement, innerR: number, outerR: number, angle: number): void {
+    const x1 = CENTER + innerR * Math.cos(angle);
+    const y1 = CENTER + innerR * Math.sin(angle);
+    const x2 = CENTER + outerR * Math.cos(angle);
+    const y2 = CENTER + outerR * Math.sin(angle);
+
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('x1', String(x1));
+    line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x2));
+    line.setAttribute('y2', String(y2));
+    line.setAttribute('class', 'radcal-unified-now-line');
+    svg.appendChild(line);
+  }
+
+  private createMementoArc(innerR: number, outerR: number, start: number, end: number, total: number): SVGPathElement {
+    const startAngle = (start / total) * 2 * Math.PI - Math.PI / 2;
+    const endAngle = (end / total) * 2 * Math.PI - Math.PI / 2;
+
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', createArcPath(innerR, outerR, startAngle, endAngle));
+    return path;
+  }
+
+  private renderCenterTime(svg: SVGSVGElement): void {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const text = document.createElementNS(SVG_NS, 'text');
+    text.setAttribute('x', String(CENTER));
+    text.setAttribute('y', String(CENTER));
+    text.setAttribute('class', 'radcal-unified-center-time');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'central');
+    text.textContent = timeStr;
+    svg.appendChild(text);
+  }
+
+  private setupTooltips(svg: SVGSVGElement): void {
+    const blocks = svg.querySelectorAll('.radcal-unified-block');
+    blocks.forEach((block) => {
+      block.addEventListener('mouseenter', (e) => {
+        const target = e.target as SVGElement;
+        const type = target.getAttribute('data-type') || '';
+        const label = target.getAttribute('data-label') || '';
+
+        let info = '';
+        if (type === 'day') {
+          info = target.getAttribute('data-time') || '';
+        } else if (type === 'week') {
+          const day = target.getAttribute('data-day') || '';
+          const time = target.getAttribute('data-time') || '';
+          info = `${day} ${time}`;
+        } else if (type === 'month') {
+          const days = target.getAttribute('data-days') || '';
+          info = `Tag ${days}`;
+        }
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'radcal-unified-tooltip';
+        tooltip.innerHTML = `<strong>${info}</strong><br>${label}`;
+        this.containerEl.appendChild(tooltip);
+
+        const event = e as MouseEvent;
+        const rect = this.containerEl.getBoundingClientRect();
+        tooltip.style.left = `${event.clientX - rect.left + 10}px`;
+        tooltip.style.top = `${event.clientY - rect.top + 10}px`;
+      });
+
+      block.addEventListener('mouseleave', () => {
+        const tooltip = this.containerEl.querySelector('.radcal-unified-tooltip');
         if (tooltip) tooltip.remove();
       });
     });

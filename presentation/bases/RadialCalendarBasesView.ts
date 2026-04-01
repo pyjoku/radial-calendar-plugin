@@ -12,8 +12,10 @@ import {
   type App,
   type TFile,
 } from 'obsidian';
+import { createArcPath, monthToAngle0 } from '../svg/SvgArc';
+import { createSvgLine, createSvgCircle, createSvgText } from '../svg/SvgHelpers';
 
-// Constants for SVG rendering
+// Constants for SVG rendering — BasesView uses a smaller canvas than the main view
 const SVG_SIZE = 600;
 const CENTER = SVG_SIZE / 2;
 const OUTER_RADIUS = (SVG_SIZE / 2) - 30;
@@ -183,7 +185,7 @@ export class RadialCalendarBasesView extends BasesView {
     this.svgEl.innerHTML = '';
 
     // Background circle
-    this.renderBackgroundCircle();
+    this.svgEl.appendChild(createSvgCircle(CENTER, CENTER, OUTER_RADIUS, 'rc-bases-background'));
 
     // Month segments
     this.renderMonthSegments();
@@ -202,35 +204,16 @@ export class RadialCalendarBasesView extends BasesView {
   }
 
   /**
-   * Render the background circle
-   */
-  private renderBackgroundCircle(): void {
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', String(CENTER));
-    circle.setAttribute('cy', String(CENTER));
-    circle.setAttribute('r', String(OUTER_RADIUS));
-    circle.setAttribute('class', 'rc-bases-background');
-    this.svgEl!.appendChild(circle);
-  }
-
-  /**
    * Render month segments (separators)
    */
   private renderMonthSegments(): void {
     for (let month = 0; month < 12; month++) {
-      const angle = this.monthToAngle(month) - Math.PI / 2;
+      const angle = monthToAngle0(month) - Math.PI / 2;
       const x1 = CENTER + INNER_RADIUS * Math.cos(angle);
       const y1 = CENTER + INNER_RADIUS * Math.sin(angle);
       const x2 = CENTER + OUTER_RADIUS * Math.cos(angle);
       const y2 = CENTER + OUTER_RADIUS * Math.sin(angle);
-
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', String(x1));
-      line.setAttribute('y1', String(y1));
-      line.setAttribute('x2', String(x2));
-      line.setAttribute('y2', String(y2));
-      line.setAttribute('class', 'rc-bases-month-separator');
-      this.svgEl!.appendChild(line);
+      this.svgEl!.appendChild(createSvgLine(x1, y1, x2, y2, 'rc-bases-month-separator'));
     }
   }
 
@@ -389,13 +372,12 @@ export class RadialCalendarBasesView extends BasesView {
    */
   private renderDayIndicator(dayOfYear: number, count: number, color: string, entries: BasesEntry[]): void {
     const daysInYear = this.isLeapYear(this.currentYear) ? 366 : 365;
-    const startAngle = ((dayOfYear - 1) / daysInYear) * 2 * Math.PI - Math.PI / 2;
-    const endAngle = (dayOfYear / daysInYear) * 2 * Math.PI - Math.PI / 2;
+    // Angles in calendar space (0 = top/Jan 1, clockwise) — createArcPath handles the -PI/2 offset
+    const startAngle = ((dayOfYear - 1) / daysInYear) * 2 * Math.PI;
+    const endAngle = (dayOfYear / daysInYear) * 2 * Math.PI;
 
-    // Create arc path
-    const path = this.createArcPath(INNER_RADIUS, OUTER_RADIUS, startAngle, endAngle);
     const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    arc.setAttribute('d', path);
+    arc.setAttribute('d', createArcPath(CENTER, INNER_RADIUS, OUTER_RADIUS, startAngle, endAngle));
     arc.setAttribute('class', 'rc-bases-entry-indicator');
     arc.style.fill = color;
     arc.style.opacity = Math.min(0.3 + count * 0.2, 1).toString();
@@ -422,16 +404,10 @@ export class RadialCalendarBasesView extends BasesView {
    */
   private renderMonthLabels(): void {
     for (let month = 0; month < 12; month++) {
-      const midAngle = this.monthToAngle(month) + (Math.PI / 12) - Math.PI / 2;
+      const midAngle = monthToAngle0(month) + (Math.PI / 12) - Math.PI / 2;
       const x = CENTER + LABEL_RADIUS * Math.cos(midAngle);
       const y = CENTER + LABEL_RADIUS * Math.sin(midAngle);
-
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', String(x));
-      text.setAttribute('y', String(y));
-      text.setAttribute('class', 'rc-bases-month-label');
-      text.textContent = MONTH_NAMES[month];
-      this.svgEl!.appendChild(text);
+      this.svgEl!.appendChild(createSvgText(x, y, MONTH_NAMES[month], 'rc-bases-month-label'));
     }
   }
 
@@ -450,35 +426,15 @@ export class RadialCalendarBasesView extends BasesView {
     const y1 = CENTER + (INNER_RADIUS - 5) * Math.sin(angle);
     const x2 = CENTER + (OUTER_RADIUS + 5) * Math.cos(angle);
     const y2 = CENTER + (OUTER_RADIUS + 5) * Math.sin(angle);
-
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', String(x1));
-    line.setAttribute('y1', String(y1));
-    line.setAttribute('x2', String(x2));
-    line.setAttribute('y2', String(y2));
-    line.setAttribute('class', 'rc-bases-today-marker');
-    this.svgEl!.appendChild(line);
+    this.svgEl!.appendChild(createSvgLine(x1, y1, x2, y2, 'rc-bases-today-marker'));
   }
 
   /**
    * Render center circle with year
    */
   private renderCenter(): void {
-    // Center circle
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', String(CENTER));
-    circle.setAttribute('cy', String(CENTER));
-    circle.setAttribute('r', String(INNER_RADIUS - 10));
-    circle.setAttribute('class', 'rc-bases-center');
-    this.svgEl!.appendChild(circle);
-
-    // Year text
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', String(CENTER));
-    text.setAttribute('y', String(CENTER));
-    text.setAttribute('class', 'rc-bases-center-text');
-    text.textContent = String(this.currentYear);
-    this.svgEl!.appendChild(text);
+    this.svgEl!.appendChild(createSvgCircle(CENTER, CENTER, INNER_RADIUS - 10, 'rc-bases-center'));
+    this.svgEl!.appendChild(createSvgText(CENTER, CENTER, String(this.currentYear), 'rc-bases-center-text'));
 
     // Entry count
     const entriesInYear = this.data.data.filter(e => {
@@ -486,44 +442,11 @@ export class RadialCalendarBasesView extends BasesView {
       return date && date.getFullYear() === this.currentYear;
     }).length;
 
-    const countText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    countText.setAttribute('x', String(CENTER));
-    countText.setAttribute('y', String(CENTER + 25));
-    countText.setAttribute('class', 'rc-bases-entry-count');
-    countText.textContent = `${entriesInYear} entries`;
-    this.svgEl!.appendChild(countText);
-  }
-
-  /**
-   * Create an arc path for SVG
-   */
-  private createArcPath(innerR: number, outerR: number, startAngle: number, endAngle: number): string {
-    const x1 = CENTER + innerR * Math.cos(startAngle);
-    const y1 = CENTER + innerR * Math.sin(startAngle);
-    const x2 = CENTER + outerR * Math.cos(startAngle);
-    const y2 = CENTER + outerR * Math.sin(startAngle);
-    const x3 = CENTER + outerR * Math.cos(endAngle);
-    const y3 = CENTER + outerR * Math.sin(endAngle);
-    const x4 = CENTER + innerR * Math.cos(endAngle);
-    const y4 = CENTER + innerR * Math.sin(endAngle);
-
-    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
-
-    return [
-      `M ${x1} ${y1}`,
-      `L ${x2} ${y2}`,
-      `A ${outerR} ${outerR} 0 ${largeArc} 1 ${x3} ${y3}`,
-      `L ${x4} ${y4}`,
-      `A ${innerR} ${innerR} 0 ${largeArc} 0 ${x1} ${y1}`,
-      'Z',
-    ].join(' ');
-  }
-
-  /**
-   * Convert month (0-11) to angle
-   */
-  private monthToAngle(month: number): number {
-    return (month / 12) * 2 * Math.PI;
+    this.svgEl!.appendChild(createSvgText(
+      CENTER, CENTER + 25,
+      `${entriesInYear} entries`,
+      'rc-bases-entry-count'
+    ));
   }
 
   /**

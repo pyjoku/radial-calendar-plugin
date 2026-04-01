@@ -62,6 +62,34 @@ export interface RadcalRingConfig {
 }
 
 /**
+ * Unified ring type for new ring: syntax
+ */
+export type UnifiedRingType = 'day' | 'week' | 'month' | 'hour' | 'season' | 'year' | 'life';
+
+/**
+ * Unified ring configuration (new syntax)
+ */
+export interface UnifiedRingConfig {
+  type: UnifiedRingType;
+  filter?: string;
+  showCurrentTime?: boolean;
+  label?: string;
+
+  // Life ring config
+  birthYear?: number;
+  lifespan?: number;
+}
+
+/**
+ * Unified radcal configuration (new syntax)
+ */
+export interface UnifiedRadcalConfig {
+  showToday?: boolean;
+  year?: number;
+  rings: UnifiedRingConfig[];
+}
+
+/**
  * Default configuration values
  */
 export const DEFAULT_RADCAL_CONFIG: RadcalBlockConfig = {
