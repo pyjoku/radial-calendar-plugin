@@ -21,6 +21,7 @@ import type {
   RadialCalendarSettings,
   PhaseWithTrack,
   PatternName,
+  LifeActConfig,
 } from '../../core/domain/types';
 import {
   RING_COLORS,
@@ -204,7 +205,7 @@ export class LifeRenderer {
    */
   private renderLifePhasesRing(svg: SVGSVGElement, birthYear: number, lifespan: number): void {
     const { settings, service, visibleRings } = this.deps;
-    const folder = settings.lifePhasesFolder;
+    const folder = '';
 
     const ringMap = service.loadLifePhasesByRing(folder);
     if (ringMap.size === 0) return;
@@ -237,7 +238,7 @@ export class LifeRenderer {
       const ringOuter = LIFE_PHASES_RING_OUTER - (ringIndex * ringWidth) - ringGap;
       const ringInner = LIFE_PHASES_RING_OUTER - ((ringIndex + 1) * ringWidth) + ringGap;
 
-      const presets = settings.presets || [];
+      const presets: never[] = [];
       const segments = service.computeLifePhaseSegments(phases, birthYear, lifespan, birthDate, presets);
 
       // Group segments by category within this ring
@@ -626,7 +627,7 @@ export class LifeRenderer {
    */
   private renderLifeActsOnRing(svg: SVGSVGElement, birthYear: number, lifespan: number): void {
     const { settings } = this.deps;
-    const lifeActs = settings.lifeActs;
+    const lifeActs: LifeActConfig[] = [];
     if (lifeActs.length === 0) return;
 
     for (const act of lifeActs) {

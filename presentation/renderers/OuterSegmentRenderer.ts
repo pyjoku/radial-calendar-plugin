@@ -49,29 +49,7 @@ export class OuterSegmentRenderer {
   private getSegmentsForCurrentView(): OuterSegmentConfig[] {
     const settings = this.settings;
 
-    // For now, only support annual view segments
-    if (settings.currentView === 'life') {
-      // Convert life acts to segment format
-      return this.lifeActsToSegments(settings.lifeActs);
-    }
-
-    switch (settings.annualSegmentType) {
-      case 'seasons':
-        return PREDEFINED_SEASONS;
-      case 'quarters':
-        return PREDEFINED_QUARTERS;
-      case 'semester':
-        return PREDEFINED_SEMESTERS;
-      case 'ten-days':
-        return generate10DayPhases();
-      case 'weeks':
-        return generateWeekSegments();
-      case 'custom':
-        return settings.customSegments;
-      case 'none':
-      default:
-        return [];
-    }
+    return [];
   }
 
   /**
@@ -101,7 +79,7 @@ export class OuterSegmentRenderer {
    * Renders a single segment tick and label.
    */
   private renderSegmentTick(svg: SVGSVGElement, segment: OuterSegmentConfig, year: number): void {
-    const showLabels = this.settings.showSegmentLabels;
+    const showLabels = true;
 
     // Calculate angle for start position
     const startAngle = this.dayOfYearToAngle(segment.startDay);

@@ -808,8 +808,15 @@ export interface PeriodicNotesFormat {
  * Complete Radial Calendar settings
  */
 export interface RadialCalendarSettings {
-  /** Current view mode */
-  currentView: RadialViewMode;
+  // ======== Sidebar ========
+
+  /** Sidebar display mode: Calendar (default + year nav) or Custom (codeblock) */
+  sidebarMode: 'calendar' | 'custom';
+
+  /** Raw codeblock content to render in Custom sidebar mode */
+  customCodeblock: string;
+
+  // ======== Identity ========
 
   /** Birth year for life view (legacy, use birthDate if available) */
   birthYear: number;
@@ -820,65 +827,19 @@ export interface RadialCalendarSettings {
   /** Expected lifespan for life view */
   expectedLifespan: number;
 
-  /** Current year for annual view */
-  currentYear: number;
-
-  /** Current month (1-12) for month/quarter views */
-  currentMonth: number;
-
-  /** Current quarter (1-4) for quarter view */
-  currentQuarter: number;
-
-  /** Period configuration for custom periods */
-  periodConfig: PeriodConfig;
-
-  /** Custom period string (e.g., "10d", "3m", "2w") */
-  customPeriodString: string;
-
-  /** Current start date for custom period view (ISO string YYYY-MM-DD) */
-  customPeriodStart: string;
-
-  /** Ring configurations (ordered from outside to inside) */
-  rings: RingConfig[];
-
-  /** Center display mode */
-  centerDisplay: CenterDisplayMode;
-
-  /** Periodic notes format */
-  periodicNotesFormat: PeriodicNotesFormat;
-
-  /** Template folder for generated templates */
-  templateFolder: string;
-
   // ======== Daily Notes ========
 
   /** Folder for daily notes (where new notes are created) */
   dailyNoteFolder: string;
 
-  /** Folder filter for which files to show in calendar */
-  calendarFilterFolder: string;
+  /** Periodic notes format */
+  periodicNotesFormat: PeriodicNotesFormat;
 
   /** Folder for annual recurring notes (birthdays, anniversaries) */
   annualRecurringFolder: string;
 
-  // ======== Life Phases ========
-
-  /** Folder for life phase notes */
-  lifePhasesFolder: string;
-
-  // ======== Outer Segments ========
-
-  /** Annual view segment type */
-  annualSegmentType: AnnualSegmentType;
-
-  /** Custom segments for annual view */
-  customSegments: OuterSegmentConfig[];
-
-  /** Life acts for life view */
-  lifeActs: LifeActConfig[];
-
-  /** Whether to show segment labels */
-  showSegmentLabels: boolean;
+  /** Template folder for generated templates */
+  templateFolder: string;
 
   // ======== Anniversary Settings ========
 
@@ -896,20 +857,15 @@ export interface RadialCalendarSettings {
    */
   calendarSources: CalendarSourceConfig[];
 
-  // ======== Presets ========
-
-  /**
-   * User-defined appearance presets.
-   * Use radcal-preset: presetName to apply.
-   */
-  presets: PresetConfig[];
-
   // ======== Memento Mori ========
 
   /**
    * Memento Mori multi-ring view settings
    */
   mementoMori: MementoMoriSettings;
+
+  /** Internal: marks that v2 migration has run */
+  _v2Migrated?: boolean;
 }
 
 // ============================================================================
@@ -1467,48 +1423,6 @@ export function generateWeekSegments(): OuterSegmentConfig[] {
 }
 
 /**
- * Default Radial Calendar settings
- */
-export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
-  currentView: 'annual',
-  birthYear: 1990,
-  expectedLifespan: 85,
-  currentYear: new Date().getFullYear(),
-  currentMonth: new Date().getMonth() + 1, // 1-12
-  currentQuarter: Math.ceil((new Date().getMonth() + 1) / 3), // 1-4
-  periodConfig: { type: 'annual' },
-  customPeriodString: '10d', // Default: 10-day period
-  customPeriodStart: new Date().toISOString().split('T')[0], // Today
-  rings: [],
-  centerDisplay: 'countdown',
-  periodicNotesFormat: {
-    yearly: 'YYYY',
-    monthly: 'YYYY-MM',
-    daily: 'YYYY-MM-DD',
-  },
-  templateFolder: 'Templates',
-  // Daily notes
-  dailyNoteFolder: '',
-  calendarFilterFolder: '',
-  annualRecurringFolder: '',
-  // Life phases
-  lifePhasesFolder: '',
-  // Outer segments
-  annualSegmentType: 'none',
-  customSegments: [],
-  lifeActs: [],
-  showSegmentLabels: true,
-  // Anniversary
-  anniversaryDateProperties: [],
-  // Calendar sync
-  calendarSources: [],
-  // Presets
-  presets: [...DEFAULT_PRESETS],
-  // Memento Mori
-  mementoMori: DEFAULT_MEMENTO_MORI_SETTINGS,
-};
-
-/**
  * Default Memento Mori settings
  */
 export const DEFAULT_MEMENTO_MORI_SETTINGS: MementoMoriSettings = {
@@ -1525,6 +1439,33 @@ export const DEFAULT_MEMENTO_MORI_SETTINGS: MementoMoriSettings = {
   colorPast: 'gray',
   colorPresent: 'red',
   colorFuture: 'blue',
+};
+
+/**
+ * Default Radial Calendar settings
+ */
+export const DEFAULT_RADIAL_SETTINGS: RadialCalendarSettings = {
+  // Sidebar
+  sidebarMode: 'calendar',
+  customCodeblock: '',
+  // Identity
+  birthYear: 1990,
+  expectedLifespan: 85,
+  // Daily notes
+  dailyNoteFolder: '',
+  periodicNotesFormat: {
+    yearly: 'YYYY',
+    monthly: 'YYYY-MM',
+    daily: 'YYYY-MM-DD',
+  },
+  annualRecurringFolder: '',
+  templateFolder: 'Templates',
+  // Anniversary
+  anniversaryDateProperties: [],
+  // Calendar sync
+  calendarSources: [],
+  // Memento Mori
+  mementoMori: DEFAULT_MEMENTO_MORI_SETTINGS,
 };
 
 /**

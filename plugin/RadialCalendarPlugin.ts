@@ -18,7 +18,7 @@ import { createRadialCalendarBasesView } from '../presentation/bases/RadialCalen
 import { ColorSuggesterModal } from '../presentation/components/ColorSuggesterModal';
 import { RadcalPropertyModal } from '../presentation/components/PropertyModal';
 import type { RadialCalendarSettings, LinearCalendarSettings, LocalDate } from '../core/domain/types';
-import { DEFAULT_RADIAL_SETTINGS, createLocalDate, createGlobalRing } from '../core/domain/types';
+import { DEFAULT_RADIAL_SETTINGS, createLocalDate } from '../core/domain/types';
 
 export class RadialCalendarPlugin extends Plugin {
   private service: CalendarService | null = null;
@@ -298,14 +298,23 @@ export class RadialCalendarPlugin extends Plugin {
     const data = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_RADIAL_SETTINGS, data);
 
-    // Migration: Add Global Ring if it doesn't exist
-    const hasGlobalRing = this.settings.rings.some(r => r.ringType === 'global');
-    if (!hasGlobalRing) {
-      // Insert Global Ring at position 0 (outermost), shift other rings
-      const globalRing = createGlobalRing(0);
-      this.settings.rings = this.settings.rings.map(r => ({ ...r, order: r.order + 1 }));
-      this.settings.rings.unshift(globalRing);
+    // v2 migration: convert old ring config to customCodeblock
+    const raw = await this.loadData() as Record<string, unknown> | null;
+    if (raw && Array.isArray(raw['rings']) && raw['rings'].length > 0 && !raw['_v2Migrated']) {
+      const rings = raw['rings'] as Array<{folder?: string; color?: string; name?: string}>;
+      const lines = ['style: annual', 'rings:'];
+      for (const r of rings) {
+        if (r.folder) {
+          lines.push(`  - folder: ${r.folder}`);
+          if (r.color) lines.push(`    color: ${r.color}`);
+          if (r.name) lines.push(`    label: ${r.name}`);
+        }
+      }
+      this.settings.customCodeblock = lines.join('\n');
+      this.settings.sidebarMode = 'custom';
+      this.settings._v2Migrated = true;
       await this.saveData(this.settings);
+      new Notice('Radial Calendar v2: Ring config moved to codeblock syntax. Check Settings → Sidebar → Custom Codeblock.', 8000);
     }
 
     // Migration: Add Memento Mori settings if they don't exist

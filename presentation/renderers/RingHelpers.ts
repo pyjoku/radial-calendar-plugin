@@ -283,7 +283,7 @@ export class RingHelpers {
     const ringHeight = radii.outerRadius - radii.innerRadius;
 
     if (ring.showSpanningArcs) {
-      const presets = this.settings.presets || [];
+      const presets: never[] = [];
       const arcs = this.service.loadSpanningArcs(ring.folder, year, {
         startDateField: ring.startDateField || 'radcal-start',
         endDateField: ring.endDateField || 'radcal-end',
@@ -372,9 +372,11 @@ export class RingHelpers {
     const ringColor = RING_COLORS.gray;
 
     const virtualRing: RingConfig = {
+      id: 'global-spanning',
       name: 'Global',
       folder: '',
       color: 'gray',
+      segmentType: 'daily',
       enabled: true,
       order: 999,
       showSpanningArcs: true,
@@ -403,7 +405,7 @@ export class RingHelpers {
     radii: RingRadiiLocal,
     ringColor: string
   ): void {
-    const presets = this.settings.presets || [];
+    const presets: never[] = [];
     const arcs = this.service.loadSpanningArcs(ring.folder, year, {
       startDateField: ring.startDateField || 'radcal-start',
       endDateField: ring.endDateField || 'radcal-end',

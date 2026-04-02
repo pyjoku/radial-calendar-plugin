@@ -8,50 +8,23 @@
  * - Interactive hover and click for navigation
  */
 
-import { ItemView, WorkspaceLeaf, Menu, TFile } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Menu } from 'obsidian';
 import type { CalendarService } from '../../application/services/CalendarService';
 import type { CalendarEntry } from '../../core/domain/models/CalendarEntry';
 import type { LocalDate } from '../../core/domain/models/LocalDate';
-import { getToday, createLocalDate, getWeekday, getDaysInMonth } from '../../core/domain/models/LocalDate';
+import { getToday, getWeekday, getDaysInMonth } from '../../core/domain/models/LocalDate';
 import type { RadialCalendarSettings, RingConfig, RenderedSegment, PhaseWithTrack, PatternName } from '../../core/domain/types';
-import {
-  RING_COLORS,
-  SVG_PATTERN_BUILDERS,
-  PREDEFINED_SEASONS,
-  PREDEFINED_QUARTERS,
-  PREDEFINED_SEMESTERS,
-  generate10DayPhases,
-  generateWeekSegments,
-  assignTracks,
-  computeSubRingRadii,
-  getMaxTrackCount,
-  parseCustomPeriod,
-} from '../../core/domain/types';
+import { RING_COLORS, assignTracks, computeSubRingRadii, getMaxTrackCount, SVG_PATTERN_BUILDERS } from '../../core/domain/types';
 import {
   SVG_SIZE,
   CENTER,
-  MAX_RADIUS,
   OUTER_RADIUS,
   INNER_RADIUS,
   DATA_RING_INNER,
   LABEL_RING_WIDTH,
   MONTH_LABEL_RADIUS,
-  DAY_RING_WIDTH,
   RING_GAP,
   MIN_RING_WIDTH,
-  LIFE_VIEW_PROPORTIONS,
-  CENTER_RADIUS,
-  YEAR_RING_INNER,
-  YEAR_RING_OUTER,
-  LIFE_PHASES_RING_INNER,
-  LIFE_PHASES_RING_OUTER,
-  LIFE_RING_INNER,
-  LIFE_RING_OUTER,
-  SEGMENT_TICK_INNER,
-  SEGMENT_TICK_OUTER,
-  SEGMENT_LABEL_RADIUS,
-  ANNIVERSARY_RING_RADIUS,
-  ANNIVERSARY_DOT_RADIUS,
   MONTH_NAMES,
   FULL_MONTH_NAMES,
   type RingRadii,
@@ -60,6 +33,10 @@ import { createArcPath as sharedCreateArcPath, monthToAngle as sharedMonthToAngl
 import { OuterSegmentRenderer } from '../renderers/OuterSegmentRenderer';
 import { RingHelpers } from '../renderers/RingHelpers';
 import { PeriodRenderer, PeriodRenderContext } from '../renderers/PeriodRenderer';
+import { parseRadcalConfig } from '../codeblock/RadcalConfigParser';
+import { RadcalRenderer, EntriesByDate } from '../codeblock/RadcalRenderer';
+import { parseUnifiedRadcal, UnifiedRingRenderChild, parseTimeBlock, DayViewRenderChild, WeekViewRenderChild, MonthViewRenderChild, MultiRingRenderChild } from '../codeblock/TimeBlockRenderer';
+import { RadcalFilterEngine } from '../codeblock/RadcalFilterEngine';
 
 export const VIEW_TYPE_RADIAL_CALENDAR = 'radial-calendar-plugin';
 
@@ -88,13 +65,6 @@ function formatDuration(days: number): string {
   return `${days}d`;
 }
 
-/**
- * Calculated radii for a ring
- */
-interface RingRadii {
-  innerRadius: number;
-  outerRadius: number;
-}
 
 export interface RadialCalendarViewConfig {
   service: CalendarService;
@@ -109,9 +79,15 @@ export class RadialCalendarView extends ItemView {
   private svgEl: SVGSVGElement | null = null;
   private tooltipEl: HTMLElement | null = null;
 
-  // Ring filter state: which rings are visible (empty = all visible)
+  // View-local state (not persisted to settings)
+  private currentYear: number = new Date().getFullYear();
+
+  // Ring filter state for life view
   private visibleRings: Set<string> = new Set();
   private allRingNames: string[] = [];
+
+  // Custom mode: filter engine for codeblock rendering
+  private filterEngine: RadcalFilterEngine | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -131,6 +107,8 @@ export class RadialCalendarView extends ItemView {
 
   initialize(config: RadialCalendarViewConfig): void {
     this.config = config;
+    this.currentYear = config.service.getCurrentYear();
+    this.filterEngine = new RadcalFilterEngine(this.app);
     this.config.service.setEventListeners({
       onEntriesUpdated: () => this.render(),
       onYearChanged: () => this.render(),
@@ -153,455 +131,210 @@ export class RadialCalendarView extends ItemView {
   render(): void {
     if (!this.containerEl_ || !this.config) return;
 
-    const service = this.config.service;
-    const year = service.getCurrentYear();
+    const sidebarMode = this.config.settings.sidebarMode ?? 'calendar';
 
-    // Build everything OFF-DOM first to prevent layout thrashing
-    // Create container structure off-DOM
     const container = document.createElement('div');
     container.className = 'rc-container';
 
-    // Build header off-DOM
     const header = document.createElement('div');
     header.className = 'rc-header';
     header.style.position = 'relative';
     header.style.zIndex = '100';
-    this.buildHeader(header, year);
+    this.buildHeader(header, sidebarMode);
     container.appendChild(header);
 
-    // Ring filter bar (Life View only)
-    const isLifeView = this.config.settings.currentView === 'life';
-    if (isLifeView) {
-      const filterBar = this.buildRingFilterBar();
-      if (filterBar) {
-        container.appendChild(filterBar);
-      }
-    }
-
-    // Build SVG wrapper off-DOM
     const wrapper = document.createElement('div');
     wrapper.className = 'rc-wrapper';
     wrapper.style.position = 'relative';
     wrapper.style.zIndex = '1';
     container.appendChild(wrapper);
 
-    // Build SVG completely off-DOM
-    this.renderRadialCalendar(wrapper, year);
-
-    // Tooltip element
     const tooltip = document.createElement('div');
     tooltip.className = 'rc-tooltip';
     tooltip.style.display = 'none';
     container.appendChild(tooltip);
     this.tooltipEl = tooltip;
 
-    // Single DOM update: clear and append everything at once
+    if (sidebarMode === 'custom') {
+      this.renderCustomCodeblock(wrapper);
+    } else {
+      this.renderCalendarMode(wrapper, this.currentYear);
+    }
+
     this.containerEl_.empty();
     this.containerEl_.appendChild(container);
   }
 
-  private buildHeader(header: HTMLElement, year: number): void {
+  private buildHeader(header: HTMLElement, sidebarMode: 'calendar' | 'custom'): void {
     if (!this.config) return;
 
-    const currentView = this.config.settings.currentView;
+    // Mode dropdown: Calendar / Custom
+    const modeSelect = document.createElement('select');
+    modeSelect.className = 'rc-view-select';
+    modeSelect.setAttribute('aria-label', 'Select sidebar mode');
+    for (const { value, label } of [
+      { value: 'calendar', label: '📅 Calendar' },
+      { value: 'custom', label: '⚙️ Custom' },
+    ]) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      opt.selected = sidebarMode === value;
+      modeSelect.appendChild(opt);
+    }
+    modeSelect.addEventListener('change', async (e) => {
+      if (!this.config) return;
+      const newMode = (e.target as HTMLSelectElement).value as 'calendar' | 'custom';
+      this.config.settings = { ...this.config.settings, sidebarMode: newMode };
+      await this.config.onSettingsChange(this.config.settings);
+      this.render();
+    });
+    header.appendChild(modeSelect);
 
-    // Previous period button
-    const prevBtn = document.createElement('button');
-    prevBtn.textContent = '\u2190';
-    prevBtn.className = 'rc-nav-btn';
-    prevBtn.setAttribute('aria-label', 'Previous period');
-    prevBtn.addEventListener('click', () => this.navigatePrevious());
-    header.appendChild(prevBtn);
+    // Year navigation — Calendar mode only
+    if (sidebarMode === 'calendar') {
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = '\u2190';
+      prevBtn.className = 'rc-nav-btn';
+      prevBtn.setAttribute('aria-label', 'Previous year');
+      prevBtn.addEventListener('click', () => {
+        this.currentYear--;
+        this.config?.service.setYear(this.currentYear);
+        this.render();
+      });
+      header.appendChild(prevBtn);
 
-    // Period title (dynamic based on view mode)
-    const periodTitle = document.createElement('span');
-    periodTitle.textContent = this.getPeriodTitle();
-    periodTitle.className = 'rc-year-title';
-    header.appendChild(periodTitle);
+      const yearTitle = document.createElement('span');
+      yearTitle.textContent = String(this.currentYear);
+      yearTitle.className = 'rc-year-title';
+      header.appendChild(yearTitle);
 
-    // Next period button
-    const nextBtn = document.createElement('button');
-    nextBtn.textContent = '\u2192';
-    nextBtn.className = 'rc-nav-btn';
-    nextBtn.setAttribute('aria-label', 'Next period');
-    nextBtn.addEventListener('click', () => this.navigateNext());
-    header.appendChild(nextBtn);
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = '\u2192';
+      nextBtn.className = 'rc-nav-btn';
+      nextBtn.setAttribute('aria-label', 'Next year');
+      nextBtn.addEventListener('click', () => {
+        this.currentYear++;
+        this.config?.service.setYear(this.currentYear);
+        this.render();
+      });
+      header.appendChild(nextBtn);
 
-    // Today button
-    const todayBtn = document.createElement('button');
-    todayBtn.textContent = 'Today';
-    todayBtn.className = 'rc-nav-btn rc-today-btn';
-    todayBtn.setAttribute('aria-label', 'Go to today');
-    todayBtn.addEventListener('click', () => this.navigateToToday());
-    header.appendChild(todayBtn);
+      const todayBtn = document.createElement('button');
+      todayBtn.textContent = 'Today';
+      todayBtn.className = 'rc-nav-btn rc-today-btn';
+      todayBtn.setAttribute('aria-label', 'Go to today');
+      todayBtn.addEventListener('click', () => {
+        this.currentYear = new Date().getFullYear();
+        this.config?.service.goToToday();
+        this.render();
+      });
+      header.appendChild(todayBtn);
+    }
 
-    // Refresh button
+    // Refresh button always visible
     const refreshBtn = document.createElement('button');
     refreshBtn.textContent = '\u21bb';
     refreshBtn.className = 'rc-nav-btn rc-refresh-btn';
     refreshBtn.setAttribute('aria-label', 'Refresh view');
     refreshBtn.addEventListener('click', () => this.render());
     header.appendChild(refreshBtn);
-
-    // View mode dropdown
-    const viewSelect = document.createElement('select');
-    viewSelect.className = 'rc-view-select';
-    viewSelect.setAttribute('aria-label', 'Select view mode');
-
-    // Get custom period label
-    const customPeriod = parseCustomPeriod(this.config.settings.customPeriodString);
-    const customLabel = customPeriod ? `⚙️ ${customPeriod.label}` : '⚙️ Custom';
-
-    const viewOptions = [
-      { value: 'life', label: '⏳ Life' },
-      { value: 'annual', label: '📅 Year' },
-      { value: 'quarter', label: '📊 Quarter' },
-      { value: 'month', label: '🗓️ Month' },
-      { value: 'custom', label: customLabel },
-    ];
-
-    for (const opt of viewOptions) {
-      const option = document.createElement('option');
-      option.value = opt.value;
-      option.textContent = opt.label;
-      option.selected = currentView === opt.value;
-      viewSelect.appendChild(option);
-    }
-
-    viewSelect.addEventListener('change', async (e) => {
-      if (!this.config) return;
-      const newView = (e.target as HTMLSelectElement).value as 'life' | 'annual' | 'quarter' | 'month' | 'custom';
-      const newSettings = { ...this.config.settings, currentView: newView };
-      this.config.settings = newSettings;
-      await this.config.onSettingsChange(newSettings);
-      this.render();
-    });
-
-    header.appendChild(viewSelect);
   }
 
-  /**
-   * Gets the title for the current period based on view mode
-   */
-  private getPeriodTitle(): string {
-    if (!this.config) return '';
-
-    const { currentView, currentYear, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
-
-    switch (currentView) {
-      case 'life':
-        return `Life (${this.config.settings.birthYear} - ${this.config.settings.birthYear + this.config.settings.expectedLifespan})`;
-      case 'annual':
-        return String(currentYear);
-      case 'quarter':
-        return `Q${currentQuarter} ${currentYear}`;
-      case 'month':
-        return `${FULL_MONTH_NAMES[currentMonth - 1]} ${currentYear}`;
-      case 'custom': {
-        const parsed = parseCustomPeriod(customPeriodString);
-        const startDate = this.parseISODate(customPeriodStart);
-        if (parsed && startDate) {
-          // Format: "Jan 1 - Jan 10" or "Jan 1 - Feb 1"
-          const endDate = this.addDaysToDate(startDate, parsed.days || (parsed.months || 1) * 30);
-          const startStr = `${MONTH_NAMES[startDate.month - 1]} ${startDate.day}`;
-          const endStr = `${MONTH_NAMES[endDate.month - 1]} ${endDate.day}`;
-          return `${startStr} - ${endStr}`;
-        }
-        return customPeriodString;
-      }
-      default:
-        return String(currentYear);
-    }
-  }
 
   /**
-   * Parse ISO date string to LocalDate
+   * Calendar mode: renders the annual SVG view
    */
-  private parseISODate(isoString: string): LocalDate | null {
-    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return null;
-    return createLocalDate(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
-  }
-
-  /**
-   * Add days to a date and return new LocalDate
-   */
-  private addDaysToDate(date: LocalDate, days: number): LocalDate {
-    const d = new Date(date.year, date.month - 1, date.day);
-    d.setDate(d.getDate() + days - 1); // -1 because end is inclusive
-    return createLocalDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
-  }
-
-  /**
-   * Navigate to previous period based on view mode
-   */
-  private async navigatePrevious(): Promise<void> {
+  private renderCalendarMode(wrapper: HTMLElement, year: number): void {
     if (!this.config) return;
-
-    const { currentView, currentYear, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
-    let newSettings = { ...this.config.settings };
-
-    switch (currentView) {
-      case 'life':
-        // Life view doesn't navigate - already shows everything
-        return;
-      case 'annual':
-        newSettings.currentYear = currentYear - 1;
-        this.config.service.setYear(currentYear - 1);
-        break;
-      case 'quarter':
-        if (currentQuarter > 1) {
-          newSettings.currentQuarter = currentQuarter - 1;
-        } else {
-          newSettings.currentQuarter = 4;
-          newSettings.currentYear = currentYear - 1;
-        }
-        break;
-      case 'month':
-        if (currentMonth > 1) {
-          newSettings.currentMonth = currentMonth - 1;
-        } else {
-          newSettings.currentMonth = 12;
-          newSettings.currentYear = currentYear - 1;
-        }
-        break;
-      case 'custom': {
-        const parsed = parseCustomPeriod(customPeriodString);
-        const startDate = this.parseISODate(customPeriodStart);
-        if (parsed && startDate) {
-          const days = parsed.days || (parsed.months || 1) * 30;
-          const newStart = this.subtractDaysFromDate(startDate, days);
-          newSettings.customPeriodStart = this.toISOString(newStart);
-          newSettings.currentYear = newStart.year;
-        }
-        break;
-      }
-    }
-
-    this.config.settings = newSettings;
-    await this.config.onSettingsChange(newSettings);
-    this.render();
-  }
-
-  /**
-   * Navigate to next period based on view mode
-   */
-  private async navigateNext(): Promise<void> {
-    if (!this.config) return;
-
-    const { currentView, currentYear, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
-    let newSettings = { ...this.config.settings };
-
-    switch (currentView) {
-      case 'life':
-        // Life view doesn't navigate - already shows everything
-        return;
-      case 'annual':
-        newSettings.currentYear = currentYear + 1;
-        this.config.service.setYear(currentYear + 1);
-        break;
-      case 'quarter':
-        if (currentQuarter < 4) {
-          newSettings.currentQuarter = currentQuarter + 1;
-        } else {
-          newSettings.currentQuarter = 1;
-          newSettings.currentYear = currentYear + 1;
-        }
-        break;
-      case 'month':
-        if (currentMonth < 12) {
-          newSettings.currentMonth = currentMonth + 1;
-        } else {
-          newSettings.currentMonth = 1;
-          newSettings.currentYear = currentYear + 1;
-        }
-        break;
-      case 'custom': {
-        const parsed = parseCustomPeriod(customPeriodString);
-        const startDate = this.parseISODate(customPeriodStart);
-        if (parsed && startDate) {
-          const days = parsed.days || (parsed.months || 1) * 30;
-          const newStart = this.addDaysToDate(startDate, days + 1); // +1 to move to next period
-          newSettings.customPeriodStart = this.toISOString(newStart);
-          newSettings.currentYear = newStart.year;
-        }
-        break;
-      }
-    }
-
-    this.config.settings = newSettings;
-    await this.config.onSettingsChange(newSettings);
-    this.render();
-  }
-
-  /**
-   * Subtract days from a date
-   */
-  private subtractDaysFromDate(date: LocalDate, days: number): LocalDate {
-    const d = new Date(date.year, date.month - 1, date.day);
-    d.setDate(d.getDate() - days);
-    return createLocalDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
-  }
-
-  /**
-   * Convert LocalDate to ISO string
-   */
-  private toISOString(date: LocalDate): string {
-    return `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
-  }
-
-  /**
-   * Navigate to today's period
-   */
-  private async navigateToToday(): Promise<void> {
-    if (!this.config) return;
-
-    const today = new Date();
-    const todayISO = today.toISOString().split('T')[0];
-    const newSettings = {
-      ...this.config.settings,
-      currentYear: today.getFullYear(),
-      currentMonth: today.getMonth() + 1,
-      currentQuarter: Math.ceil((today.getMonth() + 1) / 3),
-      customPeriodStart: todayISO,
-    };
-
-    this.config.settings = newSettings;
-    this.config.service.goToToday();
-    await this.config.onSettingsChange(newSettings);
-    this.render();
-  }
-
-  /**
-   * Builds the ring filter bar with toggle chips for each ring
-   */
-  private buildRingFilterBar(): HTMLElement | null {
-    if (!this.config) return null;
-
-    const folder = this.config.settings.lifePhasesFolder;
-    const ringMap = this.config.service.loadLifePhasesByRing(folder);
-
-    // Get all ring names
-    this.allRingNames = Array.from(ringMap.keys()).sort((a, b) => {
-      if (a === '__default__') return 1;
-      if (b === '__default__') return -1;
-      return a.localeCompare(b);
-    });
-
-    // If only default ring or no rings, don't show filter bar
-    if (this.allRingNames.length <= 1) return null;
-
-    // Initialize visible rings if empty (show all by default)
-    if (this.visibleRings.size === 0) {
-      this.allRingNames.forEach(name => this.visibleRings.add(name));
-    }
-
-    const filterBar = document.createElement('div');
-    filterBar.className = 'rc-ring-filter-bar';
-
-    // "All" toggle button
-    const allBtn = document.createElement('button');
-    allBtn.className = 'rc-ring-chip';
-    allBtn.textContent = 'Alle';
-    const allActive = this.visibleRings.size === this.allRingNames.length;
-    if (allActive) allBtn.classList.add('rc-ring-chip-active');
-    allBtn.addEventListener('click', () => {
-      if (this.visibleRings.size === this.allRingNames.length) {
-        // All are visible, do nothing (can't hide all)
-      } else {
-        // Show all rings
-        this.visibleRings.clear();
-        this.allRingNames.forEach(name => this.visibleRings.add(name));
-        this.render();
-      }
-    });
-    filterBar.appendChild(allBtn);
-
-    // Individual ring chips
-    for (const ringName of this.allRingNames) {
-      const displayName = ringName === '__default__' ? 'Standard' : ringName;
-      const chip = document.createElement('button');
-      chip.className = 'rc-ring-chip';
-      chip.textContent = displayName;
-
-      if (this.visibleRings.has(ringName)) {
-        chip.classList.add('rc-ring-chip-active');
-      }
-
-      chip.addEventListener('click', () => {
-        if (this.visibleRings.has(ringName)) {
-          // Don't allow hiding the last visible ring
-          if (this.visibleRings.size > 1) {
-            this.visibleRings.delete(ringName);
-            this.render();
-          }
-        } else {
-          this.visibleRings.add(ringName);
-          this.render();
-        }
-      });
-
-      filterBar.appendChild(chip);
-    }
-
-    return filterBar;
-  }
-
-  private renderRadialCalendar(wrapper: HTMLElement, year: number): void {
-    if (!this.config) return;
-
-    // Create SVG element
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${SVG_SIZE} ${SVG_SIZE}`);
     svg.setAttribute('class', 'rc-svg');
     this.svgEl = svg;
-
-    const { currentView, currentMonth, currentQuarter, customPeriodString, customPeriodStart } = this.config.settings;
-
-    switch (currentView) {
-      case 'life':
-        // Nested Clock: Life ring outer, Year ring inner
-        this.renderNestedClock(svg, year);
-        break;
-      case 'quarter':
-        // Quarter View: 3 months (~90 days)
-        this.renderQuarterView(svg, year, currentQuarter);
-        break;
-      case 'month':
-        // Month View: Single month (28-31 days)
-        this.renderMonthView(svg, year, currentMonth);
-        break;
-      case 'custom':
-        // Custom Period View: User-defined period (e.g., 10d, 3m)
-        this.renderCustomView(svg, customPeriodString, customPeriodStart);
-        break;
-      case 'annual':
-      default:
-        // Annual View: Full year with optional folder rings
-        this.renderAnnualView(svg, year);
-        break;
-    }
-
+    this.renderAnnualView(svg, year);
     wrapper.appendChild(svg);
   }
 
   /**
-   * Renders the nested clock view (Life View)
-   * Outer ring: Life timeline (birth to expected end)
-   * Inner ring: Current year (12 months)
+   * Custom mode: parse settings.customCodeblock and render via the codeblock pipeline
    */
-  private renderNestedClock(svg: SVGSVGElement, year: number): void {
+  private renderCustomCodeblock(wrapper: HTMLElement): void {
     if (!this.config) return;
-    new LifeRenderer({
-      settings: this.config.settings,
-      service: this.config.service,
-      app: this.app,
-      openFile: (path) => this.config!.openFile(path),
-      tooltipEl: this.tooltipEl,
-      containerEl: this.containerEl_,
-      visibleRings: this.visibleRings,
-      onRefresh: () => this.render(),
-    }).render(svg, year);
+    const source = this.config.settings.customCodeblock?.trim() ?? '';
+    if (!source) {
+      const msg = document.createElement('div');
+      msg.className = 'rc-custom-empty';
+      msg.textContent = 'No custom codeblock defined. Add one in Settings → Sidebar → Custom Codeblock.';
+      msg.style.padding = '2rem';
+      msg.style.textAlign = 'center';
+      msg.style.opacity = '0.6';
+      wrapper.appendChild(msg);
+      return;
+    }
+
+    // Detect syntax type and render accordingly
+    if (/^ring:\s*(day|week|month|hour|season|year|life)/m.test(source)) {
+      // Unified ring syntax
+      const config = parseUnifiedRadcal(source);
+      const child = new UnifiedRingRenderChild(wrapper, config);
+      child.load();
+    } else if (/^type:\s*(day|week|month)/m.test(source)) {
+      // Time block syntax
+      const parsed = parseTimeBlock(source);
+      const hasDay = parsed.dayBlocks.length > 0;
+      const hasWeek = parsed.weekBlocks.length > 0;
+      const hasMonth = parsed.monthBlocks.length > 0;
+      const typeCount = [hasDay, hasWeek, hasMonth].filter(Boolean).length;
+      if (typeCount > 1) {
+        const child = new MultiRingRenderChild(wrapper, parsed.config, parsed.dayBlocks, parsed.weekBlocks, parsed.monthBlocks);
+        child.load();
+      } else if (hasDay) {
+        const child = new DayViewRenderChild(wrapper, parsed.config, parsed.dayBlocks);
+        child.load();
+      } else if (hasWeek) {
+        const child = new WeekViewRenderChild(wrapper, parsed.config, parsed.weekBlocks);
+        child.load();
+      } else if (hasMonth) {
+        const child = new MonthViewRenderChild(wrapper, parsed.config, parsed.monthBlocks);
+        child.load();
+      }
+    } else {
+      // Standard radcal config
+      const config = parseRadcalConfig(source);
+      const year = config.year ?? this.config.service.getCurrentYear();
+      const entries = this.loadEntriesForCodeblock(config, year);
+      const renderer = new RadcalRenderer();
+      const svg = renderer.render(config, entries, year, () => {});
+      wrapper.appendChild(svg);
+    }
+  }
+
+  /**
+   * Load entries for a codeblock config (standard radcal only)
+   */
+  private loadEntriesForCodeblock(config: ReturnType<typeof parseRadcalConfig>, year: number): EntriesByDate {
+    if (!this.config) return new Map();
+    const service = this.config.service;
+    const result: EntriesByDate = new Map();
+
+    const rings = config.rings?.length ? config.rings : [{ folder: config.folder ?? '', color: 'blue' as const }];
+    for (const ring of rings) {
+      const folder = ring.folder ?? '';
+      for (let month = 1; month <= 12; month++) {
+        const days = new Date(year, month, 0).getDate();
+        for (let day = 1; day <= days; day++) {
+          const entries = folder
+            ? service.getEntriesForDateInFolder({ year, month, day }, folder)
+            : service.getEntriesForDate({ year, month, day });
+          if (entries.length > 0) {
+            const key = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const existing = result.get(key) ?? [];
+            result.set(key, [...existing, ...entries]);
+          }
+        }
+      }
+    }
+    return result;
   }
 
   /**
@@ -953,59 +686,49 @@ export class RadialCalendarView extends ItemView {
    * Includes rings from settings (including Global Ring), Daily Notes, and Calendar Sources.
    * Rings are sorted by their configured order.
    */
+  /**
+   * Calendar mode rings: Daily Notes + Calendar Sources only.
+   * Ring config is no longer in settings — it lives in codeblocks.
+   */
   private getEnabledRingsSorted(): RingConfig[] {
     if (!this.config) return [];
 
-    // Start with configured rings from settings (includes Global Ring)
-    const configuredRings = this.config.settings.rings
-      .filter(ring => ring.enabled)
-      .map(ring => ({ ...ring })); // Clone to avoid mutation
+    const rings: RingConfig[] = [];
 
-    // Add Daily Notes ring as a virtual ring after configured rings
+    // Daily Notes ring
     const dailyFolder = this.config.settings.dailyNoteFolder;
-    const maxConfiguredOrder = configuredRings.length > 0
-      ? Math.max(...configuredRings.map(r => r.order))
-      : -1;
-
-    configuredRings.push({
+    rings.push({
       id: '__daily_notes__',
       name: 'Daily Notes',
-      folder: dailyFolder?.trim() || '', // Empty string = show all entries
+      folder: dailyFolder?.trim() || '',
       color: 'blue',
       segmentType: 'daily',
       enabled: true,
-      order: maxConfiguredOrder + 1,
+      order: 0,
     });
 
-    // Add calendar sources with showAsRing enabled as virtual rings
+    // Calendar source rings
     const calendarSources = this.config.settings.calendarSources || [];
-    const calendarRings = calendarSources
+    calendarSources
       .filter(source => source.enabled && source.showAsRing !== false && source.folder)
-      .map((source, index) => ({
-        id: `__calendar_${source.id}__`,
-        name: source.name,
-        folder: source.folder,
-        color: source.color,
-        segmentType: 'daily' as const,
-        enabled: true,
-        order: maxConfiguredOrder + 2 + index,
-        // Spanning arcs for multi-day events
-        showSpanningArcs: source.showSpanningArcs !== false,
-        startDateField: 'radcal-start',
-        endDateField: 'radcal-end',
-        colorField: 'radcal-color',
-        labelField: 'radcal-label',
-      }));
+      .forEach((source, index) => {
+        rings.push({
+          id: `__calendar_${source.id}__`,
+          name: source.name,
+          folder: source.folder,
+          color: source.color,
+          segmentType: 'daily' as const,
+          enabled: true,
+          order: index + 1,
+          showSpanningArcs: source.showSpanningArcs !== false,
+          startDateField: 'radcal-start',
+          endDateField: 'radcal-end',
+          colorField: 'radcal-color',
+          labelField: 'radcal-label',
+        });
+      });
 
-    configuredRings.push(...calendarRings);
-
-    // Sort by order and re-index to ensure contiguous order values (0, 1, 2, ...)
-    configuredRings.sort((a, b) => a.order - b.order);
-    configuredRings.forEach((ring, index) => {
-      ring.order = index;
-    });
-
-    return configuredRings;
+    return rings;
   }
 
   /**
@@ -1043,8 +766,7 @@ export class RadialCalendarView extends ItemView {
    */
   private loadShowInAnnualArcs(year: number): RenderedSegment[] {
     if (!this.config) return [];
-    const presets = this.config.settings.presets || [];
-    return this.config.service.loadShowInAnnualArcs(year, presets);
+    return this.config.service.loadShowInAnnualArcs(year, []);
   }
 
   /**

@@ -9,8 +9,6 @@ import {
   BasesView,
   BasesEntry,
   type QueryController,
-  type App,
-  type TFile,
 } from 'obsidian';
 import { createArcPath, monthToAngle0 } from '../svg/SvgArc';
 import { createSvgLine, createSvgCircle, createSvgText } from '../svg/SvgHelpers';
@@ -52,10 +50,10 @@ export class RadialCalendarBasesView extends BasesView {
   private currentYear: number;
   private dateProperty: string = 'date';
   private color: string = 'blue';
-
-  constructor(controller: QueryController, containerEl: HTMLElement) {
+  constructor(controller: QueryController, parentEl: HTMLElement) {
     super(controller);
-    this.containerEl = containerEl;
+    // Create a child div — never empty/modify the parent scroll container directly
+    this.containerEl = parentEl.createDiv('radial-calendar-bases-view');
     this.currentYear = new Date().getFullYear();
   }
 
@@ -98,40 +96,41 @@ export class RadialCalendarBasesView extends BasesView {
   }
 
   /**
-   * Called when data is updated - re-render the calendar
+   * Called by Obsidian whenever there is a configuration or data change
    */
   onDataUpdated(): void {
-    console.log('Radial Calendar Bases: onDataUpdated called');
-    console.log('Radial Calendar Bases: raw config color =', this.config.get('color'));
-    console.log('Radial Calendar Bases: raw config dateProperty =', this.config.get('dateProperty'));
+    try {
+      // Get config values - handle various return types from Bases
+      this.dateProperty = this.getConfigString('dateProperty', 'date');
+      this.color = this.getConfigString('color', 'blue');
+      const yearConfig = this.config?.get('year');
+      if (yearConfig && typeof yearConfig === 'number') {
+        this.currentYear = yearConfig;
+      }
 
-    // Get config values - handle various return types from Bases
-    this.dateProperty = this.getConfigString('dateProperty', 'date');
-    this.color = this.getConfigString('color', 'blue');
-    const yearConfig = this.config.get('year');
-    if (yearConfig && typeof yearConfig === 'number') {
-      this.currentYear = yearConfig;
+      // Clear our container and re-render
+      this.containerEl.empty();
+
+      // Create header with year navigation
+      this.renderHeader();
+
+      // Create SVG container
+      const svgContainer = this.containerEl.createDiv({ cls: 'rc-bases-svg-container' });
+      this.svgEl = this.createSVG();
+      svgContainer.appendChild(this.svgEl);
+
+      // Render the calendar
+      this.renderCalendar();
+    } catch (err) {
+      console.error('Radial Calendar: render error in BasesView', err);
+      try {
+        this.containerEl.empty();
+        this.containerEl.createDiv({
+          cls: 'radial-calendar-bases-view',
+          text: `Radial Calendar render error: ${err}`,
+        });
+      } catch { /* container may be gone */ }
     }
-
-    console.log('Radial Calendar Bases: parsed dateProperty =', this.dateProperty);
-    console.log('Radial Calendar Bases: parsed color =', this.color);
-    console.log('Radial Calendar Bases: year =', this.currentYear);
-    console.log('Radial Calendar Bases: entries count =', this.data?.data?.length ?? 0);
-
-    // Clear and re-render
-    this.containerEl.empty();
-    this.containerEl.addClass('radial-calendar-bases-view');
-
-    // Create header with year navigation
-    this.renderHeader();
-
-    // Create SVG container
-    const svgContainer = this.containerEl.createDiv({ cls: 'rc-bases-svg-container' });
-    this.svgEl = this.createSVG();
-    svgContainer.appendChild(this.svgEl);
-
-    // Render the calendar
-    this.renderCalendar();
   }
 
   /**
@@ -224,34 +223,12 @@ export class RadialCalendarBasesView extends BasesView {
     const entries = this.data.data;
     const entriesByDay = new Map<number, BasesEntry[]>();
 
-    // Debug: sample first entry
-    if (entries.length > 0) {
-      const sample = entries[0];
-      console.log('Radial Calendar Bases: Sample entry file:', sample.file?.basename);
-      console.log('Radial Calendar Bases: Sample getValue("' + this.dateProperty + '"):', sample.getValue(this.dateProperty));
-    }
-
-    let noDateCount = 0;
-    let wrongYearCount = 0;
-    const yearCounts = new Map<number, number>();
-
     // Group entries by day of year
     for (const entry of entries) {
       const date = this.getEntryDate(entry);
-      if (!date) {
-        noDateCount++;
-        continue;
-      }
+      if (!date) continue;
 
-      // Track years
-      const entryYear = date.getFullYear();
-      yearCounts.set(entryYear, (yearCounts.get(entryYear) || 0) + 1);
-
-      // Check if date is in current year
-      if (entryYear !== this.currentYear) {
-        wrongYearCount++;
-        continue;
-      }
+      if (date.getFullYear() !== this.currentYear) continue;
 
       const dayOfYear = this.getDayOfYear(date);
       if (!entriesByDay.has(dayOfYear)) {
@@ -260,13 +237,8 @@ export class RadialCalendarBasesView extends BasesView {
       entriesByDay.get(dayOfYear)!.push(entry);
     }
 
-    console.log('Radial Calendar Bases: No date:', noDateCount, 'Wrong year:', wrongYearCount);
-    console.log('Radial Calendar Bases: Entries by year:', Object.fromEntries(yearCounts));
-    console.log('Radial Calendar Bases: Days with entries in', this.currentYear + ':', entriesByDay.size);
-
     // Render indicators
     const color = RING_COLORS[this.color] || RING_COLORS.blue;
-    console.log('Radial Calendar Bases: Using color:', this.color, '→', color);
 
     for (const [dayOfYear, dayEntries] of entriesByDay) {
       this.renderDayIndicator(dayOfYear, dayEntries.length, color, dayEntries);
