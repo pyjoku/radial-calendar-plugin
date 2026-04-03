@@ -21,7 +21,6 @@ import type {
   RadialCalendarSettings,
   PhaseWithTrack,
   PatternName,
-  LifeActConfig,
 } from '../../core/domain/types';
 import {
   RING_COLORS,
@@ -99,10 +98,7 @@ export class LifeRenderer {
     // 3. Year Ring (inner - months/days)
     this.renderYearRing(svg, year);
 
-    // 4. Life Acts (if configured - outer ticks)
-    this.renderLifeActsOnRing(svg, birthYear, expectedLifespan);
-
-    // 5. Center with info
+    // 4. Center with info
     this.renderNestedCenter(svg, year, currentAge);
 
     // 6. Today marker on life ring
@@ -238,8 +234,7 @@ export class LifeRenderer {
       const ringOuter = LIFE_PHASES_RING_OUTER - (ringIndex * ringWidth) - ringGap;
       const ringInner = LIFE_PHASES_RING_OUTER - ((ringIndex + 1) * ringWidth) + ringGap;
 
-      const presets: never[] = [];
-      const segments = service.computeLifePhaseSegments(phases, birthYear, lifespan, birthDate, presets);
+      const segments = service.computeLifePhaseSegments(phases, birthYear, lifespan, birthDate);
 
       // Group segments by category within this ring
       const categories = new Map<string, typeof segments>();
@@ -621,55 +616,6 @@ export class LifeRenderer {
   // ============================================================
   // Life Acts
   // ============================================================
-
-  /**
-   * Renders life acts as colored arcs on the life ring.
-   */
-  private renderLifeActsOnRing(svg: SVGSVGElement, birthYear: number, lifespan: number): void {
-    const { settings } = this.deps;
-    const lifeActs: LifeActConfig[] = [];
-    if (lifeActs.length === 0) return;
-
-    for (const act of lifeActs) {
-      const startAngle = (act.startAge / lifespan) * 2 * Math.PI;
-      const endAngle = (act.endAge / lifespan) * 2 * Math.PI - 0.01;
-
-      const path = this.createArcPath(LIFE_RING_OUTER + 2, LIFE_RING_OUTER + 8, startAngle, endAngle);
-      const arc = document.createElementNS(SVG_NS, 'path');
-      arc.setAttribute('d', path);
-      arc.setAttribute('class', 'rc-life-act');
-
-      if (act.color) {
-        arc.style.fill = RING_COLORS[act.color];
-      }
-
-      svg.appendChild(arc);
-
-      // Label
-      const midAngle = (startAngle + endAngle) / 2 - Math.PI / 2;
-      const labelRadius = LIFE_RING_OUTER + 18;
-      const x = CENTER + labelRadius * Math.cos(midAngle);
-      const y = CENTER + labelRadius * Math.sin(midAngle);
-
-      const label = document.createElementNS(SVG_NS, 'text');
-      label.setAttribute('x', String(x));
-      label.setAttribute('y', String(y));
-      label.setAttribute('class', 'rc-life-act-label');
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('dominant-baseline', 'central');
-
-      const rotationDeg = (midAngle + Math.PI / 2) * 180 / Math.PI;
-      const adjustedRotation = rotationDeg > 90 && rotationDeg < 270 ? rotationDeg + 180 : rotationDeg;
-      label.setAttribute('transform', `rotate(${adjustedRotation}, ${x}, ${y})`);
-
-      if (act.color) {
-        label.style.fill = RING_COLORS[act.color];
-      }
-
-      label.textContent = act.label;
-      svg.appendChild(label);
-    }
-  }
 
   // ============================================================
   // Position Markers

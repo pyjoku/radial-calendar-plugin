@@ -15,6 +15,8 @@ import { DayBlockProcessor } from '../presentation/codeblock/DayBlockProcessor';
 import { RadialCalendarSettingTab } from './RadialCalendarSettingTab';
 import { GoogleCalendarSync, SyncResult } from '../infrastructure/sync/GoogleCalendarSync';
 import { createRadialCalendarBasesView } from '../presentation/bases/RadialCalendarBasesView';
+import { createMultiRingBasesView } from '../presentation/bases/MultiRingBasesView';
+import { createMultiRingAllPeriodsView } from '../presentation/bases/MultiRingAllPeriodsView';
 import { ColorSuggesterModal } from '../presentation/components/ColorSuggesterModal';
 import { RadcalPropertyModal } from '../presentation/components/PropertyModal';
 import type { RadialCalendarSettings, LinearCalendarSettings, LocalDate } from '../core/domain/types';
@@ -611,6 +613,38 @@ export class RadialCalendarPlugin extends Plugin {
 
       if (registered) {
         console.log('Radial Calendar: Bases view registered successfully');
+      }
+
+      // Multi-ring view: uses Bases groupBy for concentric rings
+      const multiRegistered = this.registerBasesView('radial-multi', {
+        name: 'Radial Multi-Ring',
+        icon: 'target',
+        factory: createMultiRingBasesView,
+        options: () => [
+          {
+            type: 'text',
+            key: 'dateProperty',
+            displayName: 'Date property',
+            placeholder: 'e.g. date, birthday, due',
+            default: 'date',
+          },
+        ],
+      });
+
+      if (multiRegistered) {
+        console.log('Radial Calendar: Multi-Ring Bases view registered successfully');
+      }
+
+      // All-periods view: spanning arcs across full time range
+      const allPeriodsRegistered = this.registerBasesView('radial-allperiods', {
+        name: 'Radial All Periods',
+        icon: 'orbit',
+        factory: createMultiRingAllPeriodsView,
+        options: () => [],
+      });
+
+      if (allPeriodsRegistered) {
+        console.log('Radial Calendar: All Periods Bases view registered successfully');
       }
     } catch (error) {
       console.warn('Radial Calendar: Failed to register Bases view:', error);

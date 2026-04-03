@@ -48,7 +48,6 @@ export interface PeriodRenderContext {
   renderRingSeparator(svg: SVGSVGElement, radius: number): void;
   renderMonthSeparator(svg: SVGSVGElement, angle: number): void;
   renderLabelRingSeparator(svg: SVGSVGElement): void;
-  renderOuterSegments(svg: SVGSVGElement, year: number): void;
   renderCenter(svg: SVGSVGElement, year: number): void;
   renderMonthLabels(svg: SVGSVGElement): void;
   renderTodayMarker(svg: SVGSVGElement, year: number): void;
@@ -126,9 +125,6 @@ export class PeriodRenderer {
 
     // Render separator circle between data rings and label ring
     this.ctx.renderLabelRingSeparator(svg);
-
-    // Render outer segments (ticks with labels)
-    this.ctx.renderOuterSegments(svg, year);
 
     // Note: Anniversary indicators are now rendered as part of day arcs (10% outer edge)
     // See renderRingDayArc() and renderAnniversaryIndicator()

@@ -30,7 +30,6 @@ import {
   type RingRadii,
 } from '../svg/RingLayout';
 import { createArcPath as sharedCreateArcPath, monthToAngle as sharedMonthToAngle } from '../svg/SvgArc';
-import { OuterSegmentRenderer } from '../renderers/OuterSegmentRenderer';
 import { RingHelpers } from '../renderers/RingHelpers';
 import { PeriodRenderer, PeriodRenderContext } from '../renderers/PeriodRenderer';
 import { parseRadcalConfig } from '../codeblock/RadcalConfigParser';
@@ -636,7 +635,6 @@ export class RadialCalendarView extends ItemView {
       renderRingSeparator: (svg, r) => ringHelpers.renderRingSeparator(svg, r),
       renderMonthSeparator: (svg, angle) => this.renderMonthSeparator(svg, angle),
       renderLabelRingSeparator: (svg) => ringHelpers.renderLabelRingSeparator(svg),
-      renderOuterSegments: (svg, year) => this.renderOuterSegments(svg, year),
       renderCenter: (svg, year) => this.renderCenter(svg, year),
       renderMonthLabels: (svg) => this.renderMonthLabels(svg),
       renderTodayMarker: (svg, year) => this.renderTodayMarker(svg, year),
@@ -1064,13 +1062,5 @@ export class RadialCalendarView extends ItemView {
   // ============================================================================
   // Outer Segment Rendering
   // ============================================================================
-
-  /**
-   * Renders outer segment tick marks and labels
-   */
-  private renderOuterSegments(svg: SVGSVGElement, year: number): void {
-    if (!this.config) return;
-    new OuterSegmentRenderer(this.config.settings).renderOuterSegments(svg, year);
-  }
 
 }

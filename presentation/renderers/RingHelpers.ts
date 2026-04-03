@@ -283,13 +283,12 @@ export class RingHelpers {
     const ringHeight = radii.outerRadius - radii.innerRadius;
 
     if (ring.showSpanningArcs) {
-      const presets: never[] = [];
       const arcs = this.service.loadSpanningArcs(ring.folder, year, {
         startDateField: ring.startDateField || 'radcal-start',
         endDateField: ring.endDateField || 'radcal-end',
         colorField: ring.colorField || 'radcal-color',
         labelField: ring.labelField || 'radcal-label',
-      }, presets);
+      });
 
       const arcsWithTracks = arcs.length > 0 ? assignTracks(arcs) : [];
       const trackCount = arcsWithTracks.length > 0 ? getMaxTrackCount(arcsWithTracks) : 0;
@@ -405,13 +404,12 @@ export class RingHelpers {
     radii: RingRadiiLocal,
     ringColor: string
   ): void {
-    const presets: never[] = [];
     const arcs = this.service.loadSpanningArcs(ring.folder, year, {
       startDateField: ring.startDateField || 'radcal-start',
       endDateField: ring.endDateField || 'radcal-end',
       colorField: ring.colorField || 'radcal-color',
       labelField: ring.labelField || 'radcal-label',
-    }, presets);
+    });
 
     if (arcs.length === 0) {
       this.renderEmptyRingBackground(svg, radii);
