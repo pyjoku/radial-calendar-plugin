@@ -228,6 +228,14 @@ export class RadialCalendarSettingTab extends PluginSettingTab {
         <em>Note: This URL is private and contains a secret key. Never share it publicly.</em>
       </p>
     `;
+
+    // Security notice about secrets.json
+    const securityDiv = containerEl.createDiv({ cls: 'setting-item-description' });
+    const p = securityDiv.createEl('p');
+    p.style.fontSize = '11px';
+    p.style.color = 'var(--text-warning)';
+    p.style.marginTop = '4px';
+    p.setText('⚠️ URLs werden in secrets.json gespeichert (nicht in data.json). Für Git: .obsidian/plugins/radial-calendar-plugin/secrets.json in .gitignore eintragen.');
   }
 
   /**

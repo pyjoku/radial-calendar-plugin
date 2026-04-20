@@ -325,10 +325,70 @@ export class RadialCalendarPlugin extends Plugin {
       this.settings.mementoMori = DEFAULT_MEMENTO_MORI_SETTINGS;
       await this.saveData(this.settings);
     }
+
+    // Security: Load iCal URLs from secrets.json (not data.json)
+    const secrets = await this.loadSecrets();
+    let needsMigration = false;
+
+    if (this.settings.calendarSources) {
+      for (const source of this.settings.calendarSources) {
+        if (source.url && !secrets[source.id]) {
+          // Migration: URL still in data.json → move to secrets.json
+          secrets[source.id] = source.url;
+          needsMigration = true;
+        } else if (secrets[source.id]) {
+          source.url = secrets[source.id];
+        }
+      }
+    }
+
+    if (needsMigration) {
+      await this.saveSecrets(secrets);
+      // Strip URLs from data.json
+      const stripped = {
+        ...this.settings,
+        calendarSources: (this.settings.calendarSources ?? []).map(s => ({ ...s, url: '' })),
+      };
+      await this.saveData(stripped);
+    }
   }
 
   async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+    // Extract URLs into secrets.json
+    const urls: Record<string, string> = {};
+    for (const source of this.settings.calendarSources ?? []) {
+      if (source.url) urls[source.id] = source.url;
+    }
+    await this.saveSecrets(urls);
+
+    // Save settings without URLs to data.json
+    const stripped = {
+      ...this.settings,
+      calendarSources: (this.settings.calendarSources ?? []).map(s => ({ ...s, url: '' })),
+    };
+    await this.saveData(stripped);
+  }
+
+  private getSecretsPath(): string {
+    return `${this.app.vault.configDir}/plugins/${this.manifest.id}/secrets.json`;
+  }
+
+  private async loadSecrets(): Promise<Record<string, string>> {
+    try {
+      const path = this.getSecretsPath();
+      const exists = await this.app.vault.adapter.exists(path);
+      if (!exists) return {};
+      const raw = await this.app.vault.adapter.read(path);
+      const parsed = JSON.parse(raw);
+      return parsed.calendarUrls ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  private async saveSecrets(urls: Record<string, string>): Promise<void> {
+    const path = this.getSecretsPath();
+    await this.app.vault.adapter.write(path, JSON.stringify({ calendarUrls: urls }, null, 2));
   }
 
   private async activateView(): Promise<void> {
